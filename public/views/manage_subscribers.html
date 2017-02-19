@@ -1,0 +1,142 @@
+<div class="screen-height">
+	<div class="content" data-ng-init="ctrl.init()">
+		<div class="page-header page-header-margin-top-20">
+			<h3>{{ctrl.pgTitle}} &nbsp;&nbsp;<small>{{ctrl.pgSubtitle}}</small></h3>
+		</div>
+		
+		<div class="col-xs-12 col-sm-12 col-md-12 col-lg-12 pad-zero" style="display: block">
+			<div data-ng-if="ctrl.isPhotoSectionEnabled">
+				<div class="col-xs-8 col-sm-8 col-md-8 col-lg-8 pad-zero" 
+					style="height: 100%; display: block;">
+					<div id="sec_search" style="margin-bottom: 10px; display: block;">
+						<div style="display: inline-block;">
+							<cfelement params="ctrl.searchFieldParams"></cfelement>
+						</div>
+					</div>
+					<div id="sec_griddisplay" style="margin-bottom: 10px; display: block;">
+						<div style="height: 300px; display: block;">
+							<div data-ag-grid="ctrl.gridOptions" class="ag-blue" 
+								style="height: 100% !important; clear: both;"></div>
+						</div>
+						<div id="grid-action-btns" style="width: 100%; display: inline-block">
+							<button type="button" class="btn btn-primary float-left"
+								data-ng-click="ctrl.onClickBtn('Print')">Print</button>
+							<button type="button" class="btn btn-danger float-right"
+								data-ng-click="ctrl.onClickBtn('Close')">Close</button>
+							<button type="button" class="btn btn-primary float-right" style="margin-right: 5px"
+								data-ng-click="ctrl.onClickBtn('Edit')">Edit</button>
+							<button type="button" class="btn btn-primary float-right" style="margin-right: 5px"
+								data-ng-click="ctrl.onClickBtn('New')">New</button>
+						</div>
+					</div>
+					<div id="sec_form" data-ng-show="ctrl.isNewOrEditClicked">
+						<div class="panel panel-primary">
+							<div class="panel-heading">Subscriber</div>
+							<div class="panel-body">
+								<div class="col-xs-12 col-sm-12 col-md-12 col-lg-12 pad-zero form-group row" style="display: block; margin-bottom: 5px;">
+									<cfelement params="ctrl.formParams.subscriber" values="ctrl.dynamicModelValues.formParams"></cfelement>
+								</div>
+							</div>
+						</div>
+						<div class="panel panel-primary">
+							<div class="panel-heading">Address 1</div>
+							<div class="panel-body">
+								<div class="col-xs-12 col-sm-12 col-md-12 col-lg-12 pad-zero form-group row" style="display: block; margin-bottom: 5px;">
+									<cfelement params="ctrl.formParams.address1" values="ctrl.dynamicModelValues.formParams"></cfelement>
+								</div>
+							</div>
+						</div>
+						<div class="panel panel-primary">
+							<div class="panel-heading">Address 2</div>
+							<div class="panel-body">
+								<div class="col-xs-12 col-sm-12 col-md-12 col-lg-12 pad-zero form-group row" style="display: block; margin-bottom: 5px;">
+									<cfelement params="ctrl.formParams.address2" values="ctrl.dynamicModelValues.formParams"></cfelement>
+								</div>
+							</div>
+						</div>
+
+						<div id="grid-action-btns" style="width: 100%; display: inline-block">
+							<button type="button" class="btn btn-primary float-right" style="margin-right: 5px"
+								data-ng-click="ctrl.onClickBtn('Clear')">Clear</button>
+							<button type="button" class="btn btn-primary float-right" style="margin-right: 5px"
+								data-ng-click="ctrl.onClickBtn('Save')">Save</button>
+						</div>
+					</div>
+				</div>
+
+				<div class="col-xs-1 col-sm-1 col-md-1 col-lg-1 pad-zero" 
+					style="height: 100%; border-right: 5px double orangered;">
+					
+				</div>
+				<div class="col-xs-3 col-sm-3 col-md-3 col-lg-3 pad-zero" 
+					style="height: 100%">
+					<h3 style="text-align: center">Photo</h3>
+				</div>
+			</div>
+
+			<div data-ng-if="!ctrl.isPhotoSectionEnabled">
+				<div class="col-xs-12 col-sm-12 col-md-12 col-lg-12 pad-zero" style="height: 100%">
+					<div id="sec_search" class="col-xs-12 col-sm-12 col-md-12 col-lg-12 pad-zero" 
+						style="margin-bottom: 10px; display: block;">
+						<div style="display: inline-block;" class="col-xs-12 col-sm-12 col-md-12 col-lg-12">
+							<cfelement params="ctrl.searchFieldParams" values="ctrl.dynamicModelValues.formParams"></cfelement>
+						</div>
+					</div>
+					<div id="sec_griddisplay" class="col-xs-12 col-sm-12 col-md-12 col-lg-12 pad-zero"
+						style="margin-bottom: 20px; display: block;">
+						<div class="col-xs-12 col-sm-12 col-md-12 col-lg-12" 
+							style="height: 300px; display: block; margin-bottom: 10px">
+							<div data-ag-grid="ctrl.gridOptions" class="ag-blue" 
+								style="height: 100% !important; clear: both;"></div>
+						</div>
+						<div id="grid-action-btns"class="col-xs-12 col-sm-12 col-md-12 col-lg-12" 
+							style="width: 100%; display: inline-block">
+							<button type="button" class="btn btn-primary btn-sm float-left"
+								data-ng-click="ctrl.onClickBtn('Print')"><i class="fa fa-print"></i>&nbsp;Print</button>
+							<button type="button" class="btn btn-danger btn-sm float-right"
+								data-ng-click="ctrl.onClickBtn('Close')"><i class="fa fa-close"></i>&nbsp;Close</button>
+							<button type="button" class="btn btn-primary btn-sm float-right" style="margin-right: 5px"
+								data-ng-click="ctrl.onClickBtn('Edit')"><i class="fa fa-edit"></i>&nbsp;Edit</button>
+							<button type="button" class="btn btn-primary btn-sm float-right" style="margin-right: 5px"
+								data-ng-click="ctrl.onClickBtn('New')"><i class="fa fa-plus"></i>&nbsp;New</button>
+						</div>
+					</div>
+					<div id="sec_form" class="col-xs-12 col-sm-12 col-md-12 col-lg-12 pad-zero"
+						data-ng-show="ctrl.isNewClicked || ctrl.isEditClicked">
+						<div class="panel panel-primary">
+							<div class="panel-heading">Subscriber</div>
+							<div class="panel-body">
+								<div class="col-xs-12 col-sm-12 col-md-12 col-lg-12 pad-zero form-group row">
+									<cfelement params="ctrl.formParams.subscriber" values="ctrl.dynamicModelValues.formParams"></cfelement>
+								</div>
+							</div>
+						</div>
+						<div class="panel panel-primary">
+							<div class="panel-heading">Address 1</div>
+							<div class="panel-body">
+								<div class="col-xs-12 col-sm-12 col-md-12 col-lg-12 pad-zero form-group row" style="display: block; margin-bottom: 5px;">
+									<cfelement params="ctrl.formParams.address1" values="ctrl.dynamicModelValues.formParams"></cfelement>
+								</div>
+							</div>
+						</div>
+						<div class="panel panel-primary">
+							<div class="panel-heading">Address 2</div>
+							<div class="panel-body">
+								<div class="col-xs-12 col-sm-12 col-md-12 col-lg-12 pad-zero form-group row" style="display: block; margin-bottom: 5px;">
+									<cfelement params="ctrl.formParams.address2" values="ctrl.dynamicModelValues.formParams"></cfelement>
+								</div>
+							</div>
+						</div>
+
+						<div id="grid-action-btns" style="width: 100%; display: inline-block">
+							<button type="button" class="btn btn-primary btn-sm float-right" style="margin-right: 5px"
+								data-ng-click="ctrl.onClickBtn('Clear')"><i class="fa fa-close"></i>&nbsp;Clear</button>
+							<button type="button" class="btn btn-primary btn-sm float-right" style="margin-right: 5px"
+								data-ng-click="ctrl.onClickBtn('Save')"><i class="fa fa-save"></i>&nbsp;Save</button>
+						</div>
+					</div>
+				</div>
+			</div>
+		</div>
+	</div>
+</div>

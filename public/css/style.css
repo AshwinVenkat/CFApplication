@@ -1,0 +1,35 @@
+.below-navbar{
+    padding-top: 60px; 
+}
+
+.screen-height{
+    height: 100%;
+}
+
+.pad-zero {
+    padding: 0px;
+}
+
+.pad-left-zero {
+    padding-left: 0px;
+}
+
+.pad-right-zero {
+    padding-right: 0px;
+}
+
+.float-left{
+    float: left;
+}
+
+.float-right{
+    float: right;
+}
+
+label{
+    padding-top: 5px;
+}
+
+.page-header-margin-top-20 {
+    margin-top: 20px;
+}
