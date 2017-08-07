@@ -1,6 +1,6 @@
 (function () {
     var CFApp = angular.module('CFApp');
-    var GroupDetailsCtrl = function ($scope, $filter, GroupDetailsService) {
+    var GroupDetailsCtrl = function ($scope, $filter, GroupDetailsService, ManageSubscriberService) {
         var ctrl = this;
 
         ctrl.pgTitle = "Group Details";
@@ -107,10 +107,10 @@
             dividend_distribution: [
                 {id:"dd_dividend_distribution", label:"Dividend Distribution", inputType:"dropdown", placeholder:"Dividend Distribution", model: "dd_dividend_distribution",
                     options: [
-                        {id:"1", label:"CMOA: Current Month On Auction"}, 
-                        {id:"2", label:"CMOA: Current Month On Receipt"},
-                        {id:"3", label:"NMOA: Next Month On Auction"},
-                        {id:"4", label:"NMOR: Next Month On Receipt"}
+                        {id:"1", label:"CAOA: Current Auction On Auction"}, 
+                        {id:"2", label:"CAOR: Current Auction On Receipt"},
+                        {id:"3", label:"NAOA: Next Auction On Auction"},
+                        {id:"4", label:"NAOR: Next Auction On Receipt"}
                     ]
                 }
             ],
@@ -137,7 +137,7 @@
 
         var summary_coldef = [
             {headerName: "Sl. No. ", Field: "rowNum", valueGetter: "node.id + 1", width: 70},
-            {headerName: "ID", field: '_id', width: 100},
+            {headerName: "ID", field: '_id', width: 100, hide: true},
             {headerName: "Group Name", field: 'group_name', width: 250},
             {headerName: "Chit Value", field: 'chit_value', width: 150},
             {headerName: "Subscribers", field: 'subscribers', width: 100},
@@ -162,15 +162,16 @@
         };
 
         var stm_coldef = [
-            {headerName: "ID", field: '_id', width: 100},
-            {headerName: "GroupID", field: 'groupid', width: 100},
+            {headerName: "ID", field: '_id', width: 100, hide: true},
+            {headerName: "GroupID", field: 'groupid', width: 100, hide: true},
             {headerName: "Ticket No", field: 'ticket_no', width: 100},
-            {headerName: "Subscriber", field: 'subscriber', width: 200, editable: true},
-            {headerName: "Indroduced By", field: 'introduced_by', width: 200, editable: true},
-            {headerName: "Collector", field: 'collector', width: 200, editable: true},
-            {headerName: "Nominee", field: 'nominee', width: 100, editable: true},
-            {headerName: "Nom Age", field: 'nominee_age', width: 100, editable: true},
-            {headerName: "Relationship", field: 'relationship', width: 150, editable: true}
+            {headerName: "SubscriberID", field: 'subscriber_id', width: 200, editable: false, hide: true},
+            {headerName: "Subscriber", field: 'subscriber', width: 200, editable: false},
+            {headerName: "Indroduced By", field: 'introduced_by', width: 200, editable: false},
+            {headerName: "Collector", field: 'collector', width: 200, editable: false},
+            {headerName: "Nominee", field: 'nominee', width: 100, editable: false},
+            {headerName: "Nom Age", field: 'nominee_age', width: 100, editable: false},
+            {headerName: "Relationship", field: 'relationship', width: 150, editable: false}
         ];
 
         var stm_rowData = [];
@@ -222,6 +223,29 @@
                 case "c_clear": clearConfigurationDetails(); break;
             }
         }
+
+        /* ----------------------------------------------------------------------------------
+                                    Event receivers
+        ---------------------------------------------------------------------------------- */            
+        $scope.$on("getDropDownListData", function(event, identifier){
+            ManageSubscriberService.getDropDownListData(identifier, null).then(
+            function(response){
+                if(response != null && response.data != null && response.data.length > 0){
+                    switch(identifier){
+                        case "stm_subscriber":
+                            var foundObj = findFieldParamByID("stm_subscriber", ctrl.formParams.subscriber_ticket_mapping);
+                            var options = getOptionsArrayFromResponse(response, "subscriber");
+                            if(foundObj != null && foundObj.index != -1){
+                                ctrl.formParams.subscriber_ticket_mapping[foundObj.index].options = options;
+                            }
+                        break;
+                    }
+                }
+            }, 
+            function(response){
+                
+            });
+        });
 
         /*
         PRIVATE METHODS
@@ -452,19 +476,25 @@
                     var obj = {};    
                     if(item.ticket_no == ticketNo){
                         var formData = ctrl.stmModelValues.form_values;
+                        obj.ticket_no = ticketNo;
+                        obj.subscriber_id = formData.subscriber.id;
                         obj.subscriber = getSelectedOption(formData.subscriber.id, ctrl.formParams.subscriber_ticket_mapping[0].options).value.label;
                         obj.introduced_by = getSelectedOption(formData.introduced_by.id, ctrl.formParams.subscriber_ticket_mapping[1].options).value.label;
                         obj.collector = getSelectedOption(formData.collector.id, ctrl.formParams.subscriber_ticket_mapping[2].options).value.label;
                         obj.nominee = formData.nominee;
                         obj.nominee_age = formData.nominee_age;
                         obj.relationship = getSelectedOption(formData.relationship.id, ctrl.formParams.subscriber_ticket_mapping[5].options).value.label;
+                        obj.hasBeenPrizedSubscriber = false;
                     }else {
+                        obj.ticket_no = item.ticket_no;
+                        obj.subscriber_id = item.subscriber_id;
                         obj.subscriber = item.subscriber;
                         obj.introduced_by = item.introduced_by;
                         obj.collector = item.collector;
                         obj.nominee = item.nominee;
                         obj.nominee_age = item.nominee_age;
                         obj.relationship = item.relationship;
+                        obj.hasBeenPrizedSubscriber = false;
                     }
                     stm_array.push(obj);
                 });
@@ -506,15 +536,41 @@
                         subscribers: response.data[index]["subscriberscount"],
                         chit_value: response.data[index].data.prior_permission["chit_value"],
                         installment: response.data[index].data.prior_permission["installment"],
-                        department: response.data[index].data.prior_permission["department"].label,
+                        department: getDepartmentWithID(response.data[index].data.prior_permission["department"].id),
                         first_auction: response.data[index].data.configuration != null ? 
-                            response.data[index].data.configuration["first_auction"] : "",
+                            formatDate(response.data[index].data.configuration["first_auction"]) : "",
                         data: response.data[index].data
                     };
                     records.push(obj);
                 }
             }
             return records;
+        }
+
+        var getDepartmentWithID = function(id){
+            var array = [{id:"1", label:"Assistant Registrar of Co-op Societies & Chits"}, 
+                {id:"2", label:"Deputy Registrar of Co-op Societies & Chits"}, 
+                {id:"3", label:"Joint Registrar of Co-op Societies & Chits"}, 
+                {id:"4", label:"Sale Tax officer"}];
+            var label = "";
+
+            for(var i = 0; i < array.length; i++){
+                if(array[i].id == id){
+                    label = array[i].label;
+                }
+            }
+            return label;
+        }
+
+        var formatDate = function(date){
+            var resDate = "";
+            var datetime = new Array();
+            datetime = date.split("T");
+
+            if(datetime.length > 0){
+                resDate = datetime[0];
+            }
+            return resDate;
         }
 
         var getRowDataFromObject = function(response){
@@ -527,9 +583,9 @@
                     subscribers: response.data["subscriberscount"],
                     chit_value: response.data.data.prior_permission["chit_value"],
                     installment: response.data.data.prior_permission["installment"],
-                    department: response.data.data.prior_permission["department"].label,
+                    department: getDepartmentWithID(response.data.data.prior_permission["department"].id),
                     first_auction: response.data.data.configuration != null ? 
-                        response.data.data.configuration["first_auction"] : "",
+                        formatDate(response.data.data.configuration["first_auction"]) : "",
                     data: response.data.data
                 };
                 records.push(obj);
@@ -549,6 +605,7 @@
                     groupid: groupid,
                     ticket_no: typeof(list[index]["ticket_no"]) == "undefined" ?
                          index+1: list[index]["ticket_no"],
+                    subscriber_id: list[index]["subscriber_id"],   
                     subscriber: list[index]["subscriber"],
                     introduced_by: list[index]["introduced_by"],
                     collector: list[index]["collector"],
@@ -607,7 +664,33 @@
         var stm_clearDynamicModelValues = function(){
             ctrl.stmModelValues.form_values = {};
         }
+
+        var findFieldParamByID = function(id, list){
+            var foundObj = {obj: null, index: -1}
+            
+            for(var index = 0;index < list.length;index++){
+                if(list[index].id == id){
+                    foundObj = {obj: list[index], index: index};
+                    break;
+                }    
+            }
+
+            return foundObj;
+        }
+
+        var getOptionsArrayFromResponse = function(response, label){
+            var options = new Array();
+            for(var index = 0;index < response.data.length; index++){
+                var obj = {
+                    id: response.data[index]._id,
+                    label: response.data[index][label]
+                };
+                options.push(obj);
+            }
+            
+            return options;
+        }
 	}
 
-    CFApp.controller('GroupDetailsCtrl', ['$scope', '$filter', 'GroupDetailsService', GroupDetailsCtrl]);
+    CFApp.controller('GroupDetailsCtrl', ['$scope', '$filter', 'GroupDetailsService', 'ManageSubscriberService', GroupDetailsCtrl]);
 }());
