@@ -1,6 +1,6 @@
 # CFApplication
 
-##Pre-Requisite
+## Pre-Requisite
 1. Node.js
 2. Bower
 3. Mongo db
