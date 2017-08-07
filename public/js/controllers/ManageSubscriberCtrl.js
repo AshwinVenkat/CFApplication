@@ -59,7 +59,7 @@
                 {id:"fps_partytype", label:"Party Type", inputType:"dropdown", placeholder:"Party Type", model: "party_type",
                     options: [
                         {id:"1", label:"Cash party"}, {id:"2", label:"Subscriber"}, {id:"3", label:"Customer"},
-                        {id:"4", label:"Something"} 
+                        {id:"4", label:"Supplier"} 
                     ]
                 },
             ],
