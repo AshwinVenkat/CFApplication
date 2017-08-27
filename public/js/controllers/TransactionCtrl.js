@@ -10,20 +10,20 @@
         var transactionData = [];
 
         var columnDefs = [
-            {headerName: "Sl. No. ", Field: "rowNum", valueGetter: "node.id + 1", width: 70},
-            {headerName: "Voucher No.", field: 'VoucherNo', width: 100},
-            {headerName: "Voucher Type", field: 'VoucherType', width: 120},
-            {headerName: "Date", field: 'VoucherDate', width: 100},
-            {headerName: "Particulars", field: 'Particulars', width: 250},
-            {headerName: "Debit", field: 'Debit', width: 90},
-            {headerName: "Credit", field: 'Credit', width: 90},
-            {headerName: "Narration", field: 'Narration', width: 250},
-            {headerName: "Remarks", field: 'Remarks', width: 120},
+            { headerName: "Sl. No. ", Field: "rowNum", valueGetter: "node.id + 1", width: 70 },
+            { headerName: "Voucher No.", field: 'VoucherNo', width: 100 },
+            { headerName: "Voucher Type", field: 'VoucherType', width: 120 },
+            { headerName: "Date", field: 'VoucherDate', width: 100 },
+            { headerName: "Particulars", field: 'Particulars', width: 250 },
+            { headerName: "Debit", field: 'Debit', width: 90 },
+            { headerName: "Credit", field: 'Credit', width: 90 },
+            { headerName: "Narration", field: 'Narration', width: 250 },
+            { headerName: "Remarks", field: 'Remarks', width: 120 },
         ];
 
         ctrl.gridOptions = {};
-        
-        ctrl.init = function (){
+
+        ctrl.init = function () {
             rowData = [];
             ctrl.gridOptions = {
                 rowData: [],
@@ -33,7 +33,7 @@
                 enableSorting: true,
                 enableFilter: true,
                 enableColResize: true,
-                onGridReady: function(params) {
+                onGridReady: function (params) {
                     params.api.setColumnDefs(columnDefs);
                 }
             };
@@ -41,29 +41,29 @@
             getTransactionDetails();
         }
 
-        var getTransactionDetails = function (){
+        var getTransactionDetails = function () {
             TransactionService.getTransactionDetails().then(
-                function(response){
+                function (response) {
                     transactionData = getRowDataFromArray(response);
                     ctrl.gridOptions.api.setRowData(transactionData);
-                }, 
-                function(response){
-                    
+                },
+                function (response) {
+
                 }
             );
         }
 
-        var getRowDataFromArray = function(response){
+        var getRowDataFromArray = function (response) {
             var records = null;
-            if(response != null && response.data != null && response.data.length > 0){
+            if (response != null && response.data != null && response.data.length > 0) {
                 records = new Array();
-                for(var index = 0;index < response.data.length; index++){
+                for (var index = 0; index < response.data.length; index++) {
                     var obj = {
                         "VoucherType": response.data[index]["VoucherType"],
-                        "VoucherNo": response.data[index]["VoucherNo"], 
+                        "VoucherNo": response.data[index]["VoucherNo"],
                         "VoucherDate": formatDate(response.data[index]["VoucherDate"]),
-                        "Particulars": response.data[index].ledger != null && response.data[index].ledger.length > 0  ? 
-                            response.data[index].ledger[response.data[index].ledger.length - 1]["AccountName"] : "",
+                        "Particulars": response.data[index].ledger != null && response.data[index].ledger.length > 0 ?
+                            response.data[index].ledger[response.data[index].ledger.length - 1]["accountName"] : "",
                         "Debit": getDebitCreditAmount(response.data[index], true),
                         "Credit": getDebitCreditAmount(response.data[index], false),
                         "Narration": response.data[index]["Narration"],
@@ -75,32 +75,34 @@
             return records;
         }
 
-        var getDebitCreditAmount = function(data, isDebit){
+        var getDebitCreditAmount = function (data, isDebit) {
             var amount = null;
             var transactionType = data["TransType"];
 
-            if(isDebit && transactionType){
+            if (isDebit && transactionType) {
                 amount = data["Amount"];
-            }else if(!isDebit && !transactionType){
+            } else if (!isDebit && !transactionType) {
                 amount = data["Amount"];
-            }else {
+            } else {
                 amount = null;
             }
-            
+
             return amount;
         }
 
-        var formatDate = function(date){
+        var formatDate = function (date) {
             var resDate = "";
-            var datetime = new Array();
-            datetime = date.split("T");
+            if (date != null && typeof (date) != "undefined") {
+                var datetime = new Array();
+                datetime = date.split("T");
 
-            if(datetime.length > 0){
-                resDate = datetime[0];
+                if (datetime.length > 0) {
+                    resDate = datetime[0];
+                }
             }
             return resDate;
         }
-	}
+    }
 
     CFApp.controller('TransactionCtrl', ['$scope', 'TransactionService', TransactionCtrl]);
 }());

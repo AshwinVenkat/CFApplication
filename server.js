@@ -4,6 +4,7 @@ var app            = express();
 var mongoose       = require('mongoose');
 var bodyParser     = require('body-parser');
 var methodOverride = require('method-override');
+var bson = require('bson');
 
 // configuration ===========================================
 	

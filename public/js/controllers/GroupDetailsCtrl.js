@@ -253,8 +253,9 @@
         var savePriorPermission = function(){
             var groupdetailsdata = angular.copy(ctrl.dynamicModelValues);
             var groupdetails = {
-                groupname: groupdetailsdata.prior_permission["group_name"],
-                subscriberscount: groupdetailsdata.prior_permission["subscribers"],
+                groupName: groupdetailsdata.prior_permission["group_name"],
+                subscriberCount: groupdetailsdata.prior_permission["subscribers"],
+                allAuctionComplete: false,
                 data: groupdetailsdata,
             }
             groupdetails = JSON.stringify(groupdetails);
@@ -468,46 +469,27 @@
         var saveSubscriberTicketMapping = function(){
             var selectedRows = ctrl.stm_gridOptions.api.getSelectedRows();
             if(selectedRows != null && selectedRows.length > 0){
-                var stm_gridData = angular.copy(stm_rowData);
-                var ticketNo = selectedRows[selectedRows.length - 1].ticket_no;
+                var selectedRow = selectedRows[selectedRows.length - 1];
+                var formData = ctrl.stmModelValues.form_values;
+                var rowID = selectedRow["_id"];
 
-                var stm_array = new Array();
-                stm_gridData.forEach(function(item){
-                    var obj = {};    
-                    if(item.ticket_no == ticketNo){
-                        var formData = ctrl.stmModelValues.form_values;
-                        obj.ticket_no = ticketNo;
-                        obj.subscriber_id = formData.subscriber.id;
-                        obj.subscriber = getSelectedOption(formData.subscriber.id, ctrl.formParams.subscriber_ticket_mapping[0].options).value.label;
-                        obj.introduced_by = getSelectedOption(formData.introduced_by.id, ctrl.formParams.subscriber_ticket_mapping[1].options).value.label;
-                        obj.collector = getSelectedOption(formData.collector.id, ctrl.formParams.subscriber_ticket_mapping[2].options).value.label;
-                        obj.nominee = formData.nominee;
-                        obj.nominee_age = formData.nominee_age;
-                        obj.relationship = getSelectedOption(formData.relationship.id, ctrl.formParams.subscriber_ticket_mapping[5].options).value.label;
-                        obj.hasBeenPrizedSubscriber = false;
-                    }else {
-                        obj.ticket_no = item.ticket_no;
-                        obj.subscriber_id = item.subscriber_id;
-                        obj.subscriber = item.subscriber;
-                        obj.introduced_by = item.introduced_by;
-                        obj.collector = item.collector;
-                        obj.nominee = item.nominee;
-                        obj.nominee_age = item.nominee_age;
-                        obj.relationship = item.relationship;
-                        obj.hasBeenPrizedSubscriber = false;
-                    }
-                    stm_array.push(obj);
-                });
+                var item = {
+                    ticketNo: selectedRow["ticket_no"],
+                    groupID: selectedRow["groupid"],
+                    subscriberID: formData.subscriber.id,
+                    subscriber: getSelectedOption(formData.subscriber.id, ctrl.formParams.subscriber_ticket_mapping[0].options).value.label,
+                    introducedBy: getSelectedOption(formData.introduced_by.id, ctrl.formParams.subscriber_ticket_mapping[1].options).value.label,
+                    collector: getSelectedOption(formData.collector.id, ctrl.formParams.subscriber_ticket_mapping[2].options).value.label,
+                    nominee: formData.nominee,
+                    nomineeAge: formData.nominee_age,
+                    relationship: getSelectedOption(formData.relationship.id, ctrl.formParams.subscriber_ticket_mapping[5].options).value.label,
+                    intimation: null,
+                    hasBeenPrizedSubscriber: false
+                };
 
-                var id = selectedRows[selectedRows.length - 1]._id;
-                var group_id = selectedRows[selectedRows.length - 1].groupid;
-                var data = {
-                    group_id: group_id,
-                    data: stm_array
-                }
-                data = JSON.stringify(data);
+                var data = JSON.stringify(item);
 
-                GroupDetailsService.updateSubscriberTicketMapping(id, data)
+                GroupDetailsService.updateSubscriberTicketMapping(rowID, data)
                 .then(function(response){
                     if(response != null){
                         stm_rowData = extractSubscriberTicketMappingData(response.data);
@@ -532,8 +514,8 @@
                 for(var index = 0;index < response.data.length; index++){
                     var obj = {
                         _id: response.data[index]["_id"],
-                        group_name: response.data[index]["groupname"],
-                        subscribers: response.data[index]["subscriberscount"],
+                        group_name: response.data[index]["groupName"],
+                        subscribers: response.data[index]["subscriberCount"],
                         chit_value: response.data[index].data.prior_permission["chit_value"],
                         installment: response.data[index].data.prior_permission["installment"],
                         department: getDepartmentWithID(response.data[index].data.prior_permission["department"].id),
@@ -579,8 +561,8 @@
                 records = new Array();
                 var obj = {
                     _id: response.data["_id"],
-                    group_name: response.data["groupname"],
-                    subscribers: response.data["subscriberscount"],
+                    group_name: response.data["groupName"],
+                    subscribers: response.data["subscriberCount"],
                     chit_value: response.data.data.prior_permission["chit_value"],
                     installment: response.data.data.prior_permission["installment"],
                     department: getDepartmentWithID(response.data.data.prior_permission["department"].id),
@@ -594,26 +576,25 @@
         } 
 
         var extractSubscriberTicketMappingData = function(response){
-            var list = response.data;
-            var id = response._id;
-            var groupid = response.group_id;
-
             var records = [];
-            for(var index = 0; index < list.length; index++){
-                var obj = {
-                    _id: id,
-                    groupid: groupid,
-                    ticket_no: typeof(list[index]["ticket_no"]) == "undefined" ?
-                         index+1: list[index]["ticket_no"],
-                    subscriber_id: list[index]["subscriber_id"],   
-                    subscriber: list[index]["subscriber"],
-                    introduced_by: list[index]["introduced_by"],
-                    collector: list[index]["collector"],
-                    nominee: list[index]["nominee"],
-                    nominee_age: list[index]["nominee_age"],
-                    relationship:list[index]["relationship"]
-                };
-                records.push(obj);
+
+            if(response != null && response.length > 0){
+                for(var index = 0; index < response.length; index++){
+                    var obj = {
+                        _id: response[index]["_id"],
+                        groupid: response[index]["groupID"],
+                        ticket_no: response[index]["ticketNo"],
+                        subscriber_id: response[index]["subscriberID"],   
+                        subscriber: response[index]["subscriber"],
+                        introduced_by: response[index]["introducedBy"],
+                        collector: response[index]["collector"],
+                        nominee: response[index]["nominee"],
+                        nominee_age: response[index]["nomineeAge"],
+                        relationship: response[index]["relationship"],
+                        has_been_prized_subscriber: response[index]["hasBeenPrizedSubscriber"]
+                    };
+                    records.push(obj);
+                }
             }
 
             return records;

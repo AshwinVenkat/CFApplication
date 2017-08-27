@@ -2,19 +2,15 @@
 var mongoose = require('mongoose');
 
 var LedgerAccountSchema = new mongoose.Schema({
-  AccountName: String,
-  //ReferenceType: Number, //1: Subscriber, 2: Group
-  //ReferenceID: String,
-  // SortOrder: Number,
-  GroupID: String,
-  YearOpBalance: Number,
-  OpBalanceType: Boolean,
-  Alias: String,
-  Remarks: String  
+  accountName: String,
+  groupID: String,
+  yearOpBalance: Number,
+  opBalanceType: Boolean,
+  alias: String,
+  remarks: String  
 });
 
 module.exports = mongoose.model('LedgerAccount', LedgerAccountSchema);
-
 
 /**
  * ReferenceID used:

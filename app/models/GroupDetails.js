@@ -2,8 +2,11 @@
 var mongoose = require('mongoose');
 
 var GroupDetailsSchema = new mongoose.Schema({
-    groupname: String,
-    subscriberscount: Number,
+    groupName: String,
+    subscriberCount: Number,
+    allAuctionComplete: Boolean,
+    groupLedgerID: mongoose.Schema.Types.ObjectId,
+    dividendLedgerID: mongoose.Schema.Types.ObjectId,
     data: Object
 });
 

@@ -36,7 +36,7 @@
             { name: "Auction Details", route: "/cf/auctiondetails" },
             { name: "Accounts Management", route: "/cf/accountmgmt" },
             { name: "Transactions", route: "/cf/transactions" },
-            { name: "Installment Advance", route: "/cf/installmentadvance" },
+            // { name: "Installment Advance", route: "/cf/installmentadvance" },
             { name: "Installment Receipt", route: "/cf/installmentreceipt" },
             { name: "Payments", route: "/cf/payments" },
         ];
