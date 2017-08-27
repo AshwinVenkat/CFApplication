@@ -5,6 +5,7 @@
 2. Bower
 3. Mongo db
 4. Text editor
+5. git
 
 ## Installation
 1. Download the repository
