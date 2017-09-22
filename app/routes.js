@@ -258,6 +258,7 @@ module.exports = function (app) {
 		switch (party_type) {
 			case "1": // Cash party
 				//do not create any ledger account
+				ledgerObj = {};
 				break;
 			case "2": // Subscriber
 				ledgerObj = {
@@ -275,28 +276,47 @@ module.exports = function (app) {
 				}
 				break;
 		}
-		if (ledgerObj != null) {
-			LedgerAccount.create(ledgerObj, function (err, result) {
-				if (result != null) {
-					// once the legder is created, update the subscriber table with reference
-					req.body.ledgerID = ObjectID(result["_id"]);
-					req.body.kyc = null;
-					req.body.active = true;
-					Subscriber.findOne(function (err, result) {
-						if (result == null) {
-							req.body.isCompanySubscriber = true;
-						} else {
-							req.body.isCompanySubscriber = false;
-						}
-						Subscriber.create(req.body, function (err, post) {
-							if (err) {
-								next(err);
-							}
-							UpdateSubscriberImageDetails(req, res, image_data, post.id);
-						});
-					});
+		if (party_type == "1") {
+			req.body.ledgerID = null;
+			req.body.kyc = null;
+			req.body.active = true;
+			Subscriber.findOne(function (err, result) {
+				if (result == null) {
+					req.body.isCompanySubscriber = true;
+				} else {
+					req.body.isCompanySubscriber = false;
 				}
+				Subscriber.create(req.body, function (err, post) {
+					if (err) {
+						next(err);
+					}
+					UpdateSubscriberImageDetails(req, res, image_data, post.id);
+				});
 			});
+		} else {
+			if (ledgerObj != null) {
+				LedgerAccount.create(ledgerObj, function (err, result) {
+					if (result != null) {
+						// once the legder is created, update the subscriber table with reference
+						req.body.ledgerID = ObjectID(result["_id"]);
+						req.body.kyc = null;
+						req.body.active = true;
+						Subscriber.findOne(function (err, result) {
+							if (result == null) {
+								req.body.isCompanySubscriber = true;
+							} else {
+								req.body.isCompanySubscriber = false;
+							}
+							Subscriber.create(req.body, function (err, post) {
+								if (err) {
+									next(err);
+								}
+								UpdateSubscriberImageDetails(req, res, image_data, post.id);
+							});
+						});
+					}
+				});
+			}
 		}
 	});
 
@@ -304,7 +324,6 @@ module.exports = function (app) {
 		var subscriberID = req.params.id;
 		var image_data = req.body.data.image_data;
 		req.body.data.image_data = [];
-
 
 		if (image_data != null && image_data.length > 0) {
 			UpdateSubscriberImageDetails(req, res, image_data, req.params.id)

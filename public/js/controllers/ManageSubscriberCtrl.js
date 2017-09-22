@@ -1,6 +1,6 @@
 (function () {
     var CFApp = angular.module('CFApp');
-    var ManageSubscriberCtrl = function ($scope, $uibModal, ManageSubscriberService) {
+    var ManageSubscriberCtrl = function ($scope, $uibModal, toastr, ManageSubscriberService) {
         var ctrl = this;
 
         var IMG_TYPE_PHOTO = 1;
@@ -259,22 +259,22 @@
                 .then(function(response){
                     rowData = getRowDataFromArray(response);
                     ctrl.gridOptions.api.setRowData(rowData);
+                    toastr.success('Party details save successfully', 'Success');
                 }, 
                 function(response){
-                    
+                    toastr.error('Error while saving party details.', 'Error');
                 });
-                //.then(onSaveSuccess, onSaveError);
             }else {
                 var id = subscriberData["id"];
                 ManageSubscriberService.updateSubscriber(id, subscriber)
                 .then(function(response){
                     rowData = getRowDataFromArray(response);
                     ctrl.gridOptions.api.setRowData(rowData);
+                    toastr.success('Party details save successfully', 'Success');
                 }, 
                 function(response){
-                    
+                    toastr.error('Error while saving party details.', 'Error'); 
                 });
-                //.then(onSaveSuccess, onSaveError);
             }
 
             onCloseClicked();
@@ -485,7 +485,7 @@
         }
 	}
 
-    CFApp.controller('ManageSubscriberCtrl', ['$scope', '$uibModal', 'ManageSubscriberService', ManageSubscriberCtrl]);
+    CFApp.controller('ManageSubscriberCtrl', ['$scope', '$uibModal', 'toastr', 'ManageSubscriberService', ManageSubscriberCtrl]);
 
     var KYCCtrl = function ($scope, $uibModalInstance, data) {
         
