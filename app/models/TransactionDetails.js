@@ -2,17 +2,12 @@
 var mongoose = require('mongoose');
 
 var TransactionDetailsSchema = new mongoose.Schema({
-  VoucherType: String,
-  VoucherDate: Date,
-  Prefix: String,
-  VoucherNo: Number,
-  Suffix: String,
-  RefNo: String,
-  AccountId: mongoose.Schema.Types.ObjectId,
-  Amount: Number,
-  Narration: String,
-  Remarks: String,
-  TransType: Boolean
+  // VoucherRowNo - _id (default ID field added by mongodb)
+  transactionHeaderID: mongoose.Schema.Types.ObjectId,
+  date: Date,
+  accountID: mongoose.Schema.Types.ObjectId,
+  amount: Number,
+  transactionType: Boolean
 });
 
 module.exports = mongoose.model('TransactionDetails', TransactionDetailsSchema);

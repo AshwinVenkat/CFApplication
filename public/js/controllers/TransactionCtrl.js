@@ -62,8 +62,8 @@
                         "VoucherType": response.data[index]["VoucherType"],
                         "VoucherNo": response.data[index]["VoucherNo"],
                         "VoucherDate": formatDate(response.data[index]["VoucherDate"]),
-                        "Particulars": response.data[index].ledger != null && response.data[index].ledger.length > 0 ?
-                            response.data[index].ledger[response.data[index].ledger.length - 1]["accountName"] : "",
+                        "Particulars": response.data[index]["accountName"] != null && response.data[index]["accountName"] != "" ?
+                            response.data[index]["accountName"] : "",
                         "Debit": getDebitCreditAmount(response.data[index], true),
                         "Credit": getDebitCreditAmount(response.data[index], false),
                         "Narration": response.data[index]["Narration"],

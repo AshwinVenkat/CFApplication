@@ -20,6 +20,7 @@ module.exports = function (app) {
 	var TransactionDetails = require('./models/TransactionDetails.js');
 	var ReceiptAdvanceDetails = require('./models/ReceiptAdvanceDetails.js');
 	var SubscriberInstallmentDetails = require('./models/SubscriberInstallmentDetails.js');
+	var VoucherSeriesDetails = require('./models/VoucherSeries.js');
 
 	// constants ===============================================================
 	var __appConfiguration = null;
@@ -103,6 +104,34 @@ module.exports = function (app) {
 		});
 	}
 
+	var insertDefaultVoucherSeriesValues = function () {
+		VoucherSeriesDetails.findOne(function (err, voucherData) {
+			if (voucherData == null) {
+				var defaultVoucherDetails = [{
+					voucherSerierID: 1, voucherClass: "Journal", voucherType: "Journal", voucherPrefix: "B",
+					startingVoucherClassNo: 1, startingVoucherTypeNo: 1, voucherSuffix: "", editable: false, lastNo: 0
+				},
+				{
+					voucherSerierID: 2, voucherClass: "Journal", voucherType: "Installment Voucher", voucherPrefix: "B",
+					startingVoucherClassNo: 1, startingVoucherTypeNo: 100, voucherSuffix: "", editable: false, lastNo: 0
+				},
+				{
+					voucherSerierID: 3, voucherClass: "Receipt", voucherType: "Receipt", voucherPrefix: "B",
+					startingVoucherClassNo: 1, startingVoucherTypeNo: 1, voucherSuffix: "", editable: false, lastNo: 0
+				},
+				{
+					voucherSerierID: 4, voucherClass: "Payment", voucherType: "Payment", voucherPrefix: "B",
+					startingVoucherClassNo: 1, startingVoucherTypeNo: 1, voucherSuffix: "", editable: false, lastNo: 0
+				}];
+
+				for (var index = 0; index < defaultVoucherDetails.length; index++) {
+					VoucherSeriesDetails.create(defaultVoucherDetails[index], function (err, data) { });
+				}
+
+			}
+		});
+	}
+
 	var readDropDownValuesFile = function () {
 		var filepath = "./config/dropdown_values.json"
 		var data = readFile(filepath);
@@ -158,6 +187,7 @@ module.exports = function (app) {
 	readAccountsFile();
 	//readDropDownValuesFile();
 	createStandardLedgerAccounts();
+	insertDefaultVoucherSeriesValues();
 
 	/* -------------------------------------------------------------------------
 							Initialization - End
@@ -648,7 +678,7 @@ module.exports = function (app) {
 										LedgerAccountName: groupDividendLedgerData[groupDividendLedgerData.length - 1]
 											.groupdividendledger.accountName,
 										ReferenceID: ObjectID(groupID),
-										ReferenceType: 2, //2 - means Group Dividend ledger Accounts,
+										ReferenceType: 3, //3 - means Group Dividend ledger Accounts,
 										TicketNo: 0,
 										LedgerID: groupDividendLedgerData[groupDividendLedgerData.length - 1]
 											.dividendLedgerID
@@ -658,8 +688,8 @@ module.exports = function (app) {
 									LedgerAccount.find({
 										"accountName": {
 											$in:
-											["Commission Collected", "Loss of Discount", "Dividend Earned", "Foreman Tkt Account",
-												"Foreman Investment Account", "Foreman Dividend Reinvested", "Cash", "Pygmy Control"]
+												["Commission Collected", "Loss of Discount", "Dividend Earned", "Foreman Tkt Account",
+													"Foreman Investment Account", "Foreman Dividend Reinvested", "Cash", "Pygmy Control"]
 										}
 									},
 										{ "_id": 1, "accountName": 1 },
@@ -687,16 +717,27 @@ module.exports = function (app) {
 		});
 
 		var requestObj = req.body;
-		requestObj.prizeWinner = ObjectID(requestObj.data.prized_subscriber.id);
-		GroupAuction.create(requestObj, function (err, data) {
-			if (err) {
-				res.send(err);
-			}
-			res.json(data);
-		});
+		SubscriberTicketMapping.findOne({
+			"groupID": ObjectID(requestObj.data.group_name.id),
+			"subscriberID": ObjectID(requestObj.data.prized_subscriber.id)
+		},
+			function (err, data) {
+				if (data != null) {
+					requestObj.prizeWinner = data._id;
+					GroupAuction.create(requestObj, function (err, data) {
+						if (err) {
+							res.send(err);
+						}
+						res.json(data);
+					});
+				}
+			});
 	});
 
 	var postJournalEntries = function (auctiondata, groupdata, subscribersarray, ledgeraccountsarray) {
+		var JOURNAL_CLASS = "Journal";
+		var JOURNAL_TYPE = "Journal";
+
 		var decodedValues = {
 			prizeAmount: parseFloat(auctiondata.data["prize_amount"]),
 			prizedSubscriberID: auctiondata.data["prized_subscriber"].id,
@@ -710,14 +751,22 @@ module.exports = function (app) {
 			groupName: groupdata.groupName
 		}
 
-		TransactionHeader.findOne({}, { VoucherNo: 1, _id: 0 })
-			.sort({ "VoucherNo": -1 }).limit(1).lean().exec(function (err, dataVoucherNo) {
+		/**
+		 * get the last used voucher number for the voucher class and voucher type
+		 */
+		VoucherSeriesDetails.findOne({ "voucherClass": JOURNAL_CLASS, "voucherType": JOURNAL_TYPE },
+			function (err, data) {
 				var maxVoucherNo = 0;
-				if (dataVoucherNo != null) {
-					maxVoucherNo = dataVoucherNo.VoucherNo;
+				if (data == null) {
+					maxVoucherNo = 0;
+				} else {
+					/**
+					 * if the lastNo is 0 then use the (startingVoucherTypeNo - 1) as the voucher number 
+					 * will be incremented furthur on in the process, other wise use the lastNo field itself
+					 */
+					maxVoucherNo = data.lastNo == 0 ? data.startingVoucherTypeNo - 1 : data.lastNo;
 				}
 				decodedValues.maxVoucherNo = maxVoucherNo;
-
 
 				/**
 				 * 1 - CAOA: Current Auction On Auction, 	2 - CAOR: Current Auction On Receipt
@@ -734,6 +783,21 @@ module.exports = function (app) {
 				}
 			});
 	}
+
+	var updateLatestVoucherNumber = function (voucherClass, voucherType, value) {
+		VoucherSeriesDetails.findOne({ "voucherClass": voucherClass, "voucherType": voucherType },
+			function (err, data) {
+				if (data != null) {
+					data.lastNo = value;
+					VoucherSeriesDetails.findByIdAndUpdate(data._id, data, function (err, data) {
+						if (err) {
+							console.log(err);
+						}
+					});
+				}
+			});
+	}
+
 
 	/**
 	 * 1. No need to check if the current auction is the first, last or inbetween as the dividend is distributed
@@ -758,12 +822,14 @@ module.exports = function (app) {
 		var isCompanyTicketPreset = checkCompanyTicket(subscribersarray);
 		var isPrizeWinnerCompanyTicket = checkIfSubscriberIsCompanyTicket(subscribersarray, decodedValues.prizedSubscriberID);
 
+		var transactionDateTime = new Date();
+
 		//Auction installment reinvested
 		if (isCompanyTicketPreset) {
 			maxVoucherNo += 1;
 			postAuctionInstallmentReinvestedDetails(maxVoucherNo, decodedValues.chitValue, decodedValues.subscribercount,
 				foremanInvestmentAccountLedger.LedgerID, foremanTktAccountLedger.LedgerID, "Auction installment reinvested",
-				remarks);
+				remarks, transactionDateTime);
 		}
 
 		//Auction prize amount credit
@@ -772,11 +838,11 @@ module.exports = function (app) {
 			if (isPrizeWinnerCompanyTicket) {
 				postAuctionPrizeWinnerDetails(maxVoucherNo, decodedValues.prizeAmount, groupLedger.LedgerID,
 					foremanTktAccountLedger.LedgerID, "Auction prize amount credit",
-					remarks);
+					remarks, transactionDateTime);
 			} else {
 				postAuctionPrizeWinnerDetails(maxVoucherNo, decodedValues.prizeAmount, groupLedger.LedgerID,
 					prizeWinnerLedger.LedgerID, "Auction prize amount credit",
-					remarks);
+					remarks, transactionDateTime);
 			}
 		}
 
@@ -785,7 +851,7 @@ module.exports = function (app) {
 			maxVoucherNo += 1;
 			postLossOfDiscountDetails(maxVoucherNo, decodedValues.companyComm, groupLedger.LedgerID,
 				lossOfDiscountLedger.LedgerID, "Loss of Discount",
-				remarks);
+				remarks, transactionDateTime);
 		}
 
 		//Auction dividend amount allocation
@@ -793,7 +859,7 @@ module.exports = function (app) {
 			maxVoucherNo += 1;
 			postAuctionDividendAmountDetails(maxVoucherNo, decodedValues.dividendAmount, groupLedger.LedgerID,
 				groupDividendLedger.LedgerID, "Auction dividend amount allocation",
-				remarks);
+				remarks, transactionDateTime);
 		}
 
 		//Auction company commission
@@ -801,7 +867,7 @@ module.exports = function (app) {
 			maxVoucherNo += 1;
 			postCompanyCommissionDetails(maxVoucherNo, decodedValues.companyComm, groupLedger.LedgerID,
 				commissionCollectedLedger.LedgerID, "Auction company commision",
-				remarks);
+				remarks, transactionDateTime);
 		}
 
 		//Auction installment
@@ -809,7 +875,7 @@ module.exports = function (app) {
 			maxVoucherNo += 1;
 			postAuctionInstallmentDetails(maxVoucherNo, decodedValues.chitValue, decodedValues.subscribercount,
 				ledgeraccountsarray, subscribersarray, groupLedger.LedgerID, "Auction installment",
-				remarks, decodedValues);
+				remarks, decodedValues, transactionDateTime);
 		}
 
 		//Dividend distributed
@@ -817,7 +883,7 @@ module.exports = function (app) {
 			maxVoucherNo += 1;
 			postDividendDistributionDetails(maxVoucherNo, decodedValues.dividendAmount, decodedValues.subscribercount,
 				ledgeraccountsarray, subscribersarray, groupDividendLedger.LedgerID, "Dividend distributed",
-				remarks, isCompanyTicketPreset, isPrizeWinnerCompanyTicket);
+				remarks, isCompanyTicketPreset, isPrizeWinnerCompanyTicket, transactionDateTime);
 		}
 
 		//Auction dividend reinvested
@@ -825,12 +891,18 @@ module.exports = function (app) {
 			maxVoucherNo += 1;
 			postDividendReinvestmentDetails(maxVoucherNo, decodedValues.dividendAmount, decodedValues.subscribercount,
 				foremanDividendReinvestedLedger.LedgerID, dividendEarnedLedger.LedgerID, "Auction dividend reinvested",
-				remarks);
+				remarks, transactionDateTime);
 		}
+
+		/**
+		 * update the last used Voucher number in the voucher series collection
+		 */
+		updateLatestVoucherNumber("Journal", "Journal", maxVoucherNo);
 	}
 
 	var postJournalEntriesForCAOR = function (auctiondata, groupdata, subscribersarray,
 		ledgeraccountsarray, decodedValues) {
+
 
 	}
 
@@ -861,35 +933,14 @@ module.exports = function (app) {
 		var isFirstAuctionInGroup = (decodedValues.auctionNo == 1) ? true : false;
 		var isLastAuctionInGroup = (decodedValues.auctionNo == decodedValues.subscribercount) ? true : false;
 
-		//Dividend distributed - previous auction
-		GroupAuction.findOne({ "GroupID": decodedValues.groupID, "AuctionNo": decodedValues.auctionNo - 1 },
-			function (err, data) {
-				if (data != null) {
-					var dividendAmt = (data.data["dividend_amount"] != null && data.data["dividend_amount"] != ""
-						&& typeof (data.data["dividend_amount"]) != "undefined") ? data.data["dividend_amount"] : 0;
-					if (groupDividendLedger != null && dividendAmt > 0) {
-						maxVoucherNo += 1;
-						postDividendDistributionDetails(maxVoucherNo, dividendAmt, decodedValues.subscribercount,
-							ledgeraccountsarray, subscribersarray, groupDividendLedger.LedgerID, "Dividend distributed",
-							remarks, isCompanyTicketPreset, isPrizeWinnerCompanyTicket);
-
-						//Auction dividend reinvested
-						if (isCompanyTicketPreset) {
-							maxVoucherNo += 1;
-							postDividendReinvestmentDetails(maxVoucherNo, dividendAmt, decodedValues.subscribercount,
-								foremanDividendReinvestedLedger.LedgerID, dividendEarnedLedger.LedgerID, "Auction dividend reinvested",
-								remarks);
-						}
-					}
-				}
-			});
+		var transactionDateTime = new Date();
 
 		//Auction installment reinvested
 		if (isCompanyTicketPreset) {
 			maxVoucherNo += 1;
 			postAuctionInstallmentReinvestedDetails(maxVoucherNo, decodedValues.chitValue, decodedValues.subscribercount,
 				foremanInvestmentAccountLedger.LedgerID, foremanTktAccountLedger.LedgerID, "Auction installment reinvested",
-				remarks);
+				remarks, transactionDateTime);
 		}
 
 		//Auction prize amount credit
@@ -898,11 +949,11 @@ module.exports = function (app) {
 			if (isPrizeWinnerCompanyTicket) {
 				postAuctionPrizeWinnerDetails(maxVoucherNo, decodedValues.prizeAmount, groupLedger.LedgerID,
 					foremanTktAccountLedger.LedgerID, "Auction prize amount credit",
-					remarks);
+					remarks, transactionDateTime);
 			} else {
 				postAuctionPrizeWinnerDetails(maxVoucherNo, decodedValues.prizeAmount, groupLedger.LedgerID,
 					prizeWinnerLedger.LedgerID, "Auction prize amount credit",
-					remarks);
+					remarks, transactionDateTime);
 			}
 		}
 
@@ -911,7 +962,7 @@ module.exports = function (app) {
 			maxVoucherNo += 1;
 			postLossOfDiscountDetails(maxVoucherNo, decodedValues.companyComm, groupLedger.LedgerID,
 				lossOfDiscountLedger.LedgerID, "Loss of Discount",
-				remarks);
+				remarks, transactionDateTime);
 		}
 
 		//Auction company commission
@@ -919,7 +970,7 @@ module.exports = function (app) {
 			maxVoucherNo += 1;
 			postCompanyCommissionDetails(maxVoucherNo, decodedValues.companyComm, groupLedger.LedgerID,
 				commissionCollectedLedger.LedgerID, "Auction company commision",
-				remarks);
+				remarks, transactionDateTime);
 		}
 
 		//Auction installment
@@ -927,8 +978,32 @@ module.exports = function (app) {
 			maxVoucherNo += 1;
 			postAuctionInstallmentDetails(maxVoucherNo, decodedValues.chitValue, decodedValues.subscribercount,
 				ledgeraccountsarray, subscribersarray, groupLedger.LedgerID, "Auction installment",
-				remarks, decodedValues);
+				remarks, decodedValues, transactionDateTime);
 		}
+
+		//Dividend distributed - previous auction
+		GroupAuction.findOne({ "groupID": ObjectID(decodedValues.groupID), "auctionNo": decodedValues.auctionNo - 1 },
+			function (err, data) {
+				if (data != null) {
+					var dividendAmt = (data.data["dividend_amount"] != null && data.data["dividend_amount"] != ""
+						&& typeof (data.data["dividend_amount"]) != "undefined") ? data.data["dividend_amount"] : 0;
+					if (groupDividendLedger != null && dividendAmt > 0) {
+						maxVoucherNo += 1;
+						//asdf
+						postDividendDistributionDetails(maxVoucherNo, dividendAmt, decodedValues.subscribercount,
+							ledgeraccountsarray, subscribersarray, groupDividendLedger.LedgerID, "Dividend distributed",
+							remarks, transactionDateTime);
+
+						//Auction dividend reinvested
+						if (isCompanyTicketPreset) {
+							maxVoucherNo += 1;
+							postDividendReinvestmentDetails(maxVoucherNo, dividendAmt, decodedValues.subscribercount,
+								foremanDividendReinvestedLedger.LedgerID, dividendEarnedLedger.LedgerID, "Auction dividend reinvested",
+								remarks, transactionDateTime);
+						}
+					}
+				}
+			});
 
 		if (groupDividendLedger != null) {
 			// if(!isCompanyTicketPreset){
@@ -936,7 +1011,7 @@ module.exports = function (app) {
 			if (groupDividendLedger != null && groupLedger != null && parseFloat(decodedValues.dividendAmount) > 0) {
 				postAuctionDividendAmountDetails(maxVoucherNo, decodedValues.dividendAmount, groupLedger.LedgerID,
 					groupDividendLedger.LedgerID, "Auction dividend amount allocation",
-					remarks);
+					remarks, transactionDateTime);
 			}
 
 			if (isLastAuctionInGroup) {
@@ -945,18 +1020,23 @@ module.exports = function (app) {
 					maxVoucherNo += 1;
 					postDividendDistributionDetails(maxVoucherNo, decodedValues.dividendAmount, decodedValues.subscribercount,
 						ledgeraccountsarray, subscribersarray, groupDividendLedger.LedgerID, "Dividend distributed",
-						remarks, isCompanyTicketPreset, isPrizeWinnerCompanyTicket);
+						remarks, transactionDateTime);
 
 					//Auction dividend reinvested
 					if (isCompanyTicketPreset) {
 						maxVoucherNo += 1;
 						postDividendReinvestmentDetails(maxVoucherNo, decodedValues.dividendAmount, decodedValues.subscribercount,
 							foremanDividendReinvestedLedger.LedgerID, dividendEarnedLedger.LedgerID, "Auction dividend reinvested",
-							remarks);
+							remarks, transactionDateTime);
 					}
 				}
 			}
 		}
+
+		/**
+		 * update the last used Voucher number in the voucher series collection
+		 */
+		updateLatestVoucherNumber("Journal", "Journal", maxVoucherNo);
 	}
 
 	var postJournalEntriesForNAOR = function (auctiondata, groupdata, subscribersarray,
@@ -964,83 +1044,88 @@ module.exports = function (app) {
 
 	}
 
-	var postAuctionPrizeWinnerDetails = function (voucherNo, prizeAmt, groupLedgerID,
-		prizeWinnerLedgerID, narration, remarks) {
+	var postAuctionPrizeWinnerDetails = function (voucherNo, prizeAmt, debitAccountID,
+		creditAccountID, narration, remarks, transactionDateTime) {
 		//Header
 		var thPrizeWinner = {
-			VoucherType: "Journal", Date: new Date(), Prefix: "", VoucherNo: voucherNo,
-			Suffix: "", RefNo: voucherNo, Amount: prizeAmt, UserId: "", NoOfItems: 2
+			Date: transactionDateTime, voucherClass: "Journal", voucherType: "Journal", Prefix: "", VoucherNo: voucherNo,
+			Suffix: "", referenceNo: voucherNo, transactionTotalAmount: prizeAmt, userID: "", noOfDetails: 2,
+			narration: narration, remarks: remarks
 		}
-		TransactionHeader.create(thPrizeWinner, function (err, data) { });
+		TransactionHeader.create(thPrizeWinner, function (err, data) {
+			if (data != null) {
+				var transactionHeaderID = data._id;
 
-		//Details
-		var tdPrizeWinnerGroup = {
-			VoucherType: "Journal", VoucherDate: new Date(), Prefix: "", VoucherNo: voucherNo,
-			Suffix: "", RefNo: voucherNo, AccountId: groupLedgerID, Amount: prizeAmt,
-			Narration: narration, Remarks: remarks, TransType: DEBIT
-		}
-		TransactionDetails.create(tdPrizeWinnerGroup, function (err, data) { });
+				//Details
+				var tdPrizeWinnerGroup = {
+					transactionHeaderID: transactionHeaderID, date: transactionDateTime, accountID: debitAccountID, amount: prizeAmt, transactionType: DEBIT
+				}
+				TransactionDetails.create(tdPrizeWinnerGroup, function (err, data) { });
 
-		var tdPrizeWinnerSubscriber = {
-			VoucherType: "Journal", VoucherDate: new Date(), Prefix: "", VoucherNo: voucherNo,
-			Suffix: "", RefNo: voucherNo, AccountId: prizeWinnerLedgerID, Amount: prizeAmt,
-			Narration: narration, Remarks: remarks, TransType: CREDIT
-		}
-		TransactionDetails.create(tdPrizeWinnerSubscriber, function (err, data) { });
+				var tdPrizeWinnerSubscriber = {
+					transactionHeaderID: transactionHeaderID, date: transactionDateTime, accountID: creditAccountID, amount: prizeAmt, transactionType: CREDIT
+				}
+				TransactionDetails.create(tdPrizeWinnerSubscriber, function (err, data) { });
+			}
+		});
 	}
 
-	var postAuctionDividendAmountDetails = function (voucherNo, dividendAmt, groupLedgerID,
-		groupDividendLedgerID, narration, remarks) {
+	var postAuctionDividendAmountDetails = function (voucherNo, dividendAmt, debitAccountID,
+		creditAccountID, narration, remarks, transactionDateTime) {
 		//Header
 		var thAuctionDividend = {
-			VoucherType: "Journal", Date: new Date(), Prefix: "", VoucherNo: voucherNo,
-			Suffix: "", RefNo: voucherNo, Amount: dividendAmt, UserId: "", NoOfItems: 2
+			Date: transactionDateTime, voucherClass: "Journal", voucherType: "Journal", Prefix: "", VoucherNo: voucherNo,
+			Suffix: "", referenceNo: voucherNo, transactionTotalAmount: dividendAmt, userID: "", noOfDetails: 2,
+			narration: narration, remarks: remarks
 		}
-		TransactionHeader.create(thAuctionDividend, function (err, data) { });
+		TransactionHeader.create(thAuctionDividend,
+			function (err, data) {
+				if (data != null) {
+					var transactionHeaderID = data._id;
 
-		//Details
-		var tdDividendGroup = {
-			VoucherType: "Journal", VoucherDate: new Date(), Prefix: "", VoucherNo: voucherNo,
-			Suffix: "", RefNo: voucherNo, AccountId: groupLedgerID, Amount: dividendAmt,
-			Narration: narration, Remarks: remarks, TransType: DEBIT
-		}
-		TransactionDetails.create(tdDividendGroup, function (err, data) { });
+					//Details
+					var tdDividendGroup = {
+						transactionHeaderID: transactionHeaderID, date: transactionDateTime, accountID: debitAccountID, amount: dividendAmt, transactionType: DEBIT
+					}
+					TransactionDetails.create(tdDividendGroup, function (err, data) { });
 
-		var tdDividendAccountGroup = {
-			VoucherType: "Journal", VoucherDate: new Date(), Prefix: "", VoucherNo: voucherNo,
-			Suffix: "", RefNo: voucherNo, AccountId: groupDividendLedgerID, Amount: dividendAmt,
-			Narration: narration, Remarks: remarks, TransType: CREDIT
-		}
-		TransactionDetails.create(tdDividendAccountGroup, function (err, data) { });
+					var tdDividendAccountGroup = {
+						transactionHeaderID: transactionHeaderID, date: transactionDateTime, accountID: creditAccountID, amount: dividendAmt, transactionType: CREDIT
+					}
+					TransactionDetails.create(tdDividendAccountGroup, function (err, data) { });
+				}
+			});
 	}
 
-	var postCompanyCommissionDetails = function (voucherNo, commissionAmt, groupLedgerID,
-		commissionCollectedLedgerID, narration, remarks) {
+	var postCompanyCommissionDetails = function (voucherNo, commissionAmt, debitAccountID,
+		creditAccountID, narration, remarks, transactionDateTime) {
 		//Header
 		var thCompanyCommission = {
-			VoucherType: "Journal", Date: new Date(), Prefix: "", VoucherNo: voucherNo,
-			Suffix: "", RefNo: voucherNo, Amount: commissionAmt, UserId: "", NoOfItems: 2
+			Date: transactionDateTime, voucherClass: "Journal", voucherType: "Journal", Prefix: "", VoucherNo: voucherNo,
+			Suffix: "", referenceNo: voucherNo, transactionTotalAmount: commissionAmt, userID: "", noOfDetails: 2,
+			narration: narration, remarks: remarks
 		}
-		TransactionHeader.create(thCompanyCommission, function (err, data) { });
+		TransactionHeader.create(thCompanyCommission,
+			function (err, data) {
+				if (data != null) {
+					var transactionHeaderID = data._id;
 
-		//Details
-		var tdCompanyCommissionGroup = {
-			VoucherType: "Journal", VoucherDate: new Date(), Prefix: "", VoucherNo: voucherNo,
-			Suffix: "", RefNo: voucherNo, AccountId: groupLedgerID, Amount: commissionAmt,
-			Narration: narration, Remarks: remarks, TransType: DEBIT
-		}
-		TransactionDetails.create(tdCompanyCommissionGroup, function (err, data) { });
+					//Details
+					var tdCompanyCommissionGroup = {
+						transactionHeaderID: transactionHeaderID, date: transactionDateTime, accountID: debitAccountID, amount: commissionAmt, transactionType: DEBIT
+					}
+					TransactionDetails.create(tdCompanyCommissionGroup, function (err, data) { });
 
-		var tdCommissionCollectedAccount = {
-			VoucherType: "Journal", VoucherDate: new Date(), Prefix: "", VoucherNo: voucherNo,
-			Suffix: "", RefNo: voucherNo, AccountId: commissionCollectedLedgerID, Amount: commissionAmt,
-			Narration: narration, Remarks: remarks, TransType: CREDIT
-		}
-		TransactionDetails.create(tdCommissionCollectedAccount, function (err, data) { });
+					var tdCommissionCollectedAccount = {
+						transactionHeaderID: transactionHeaderID, date: transactionDateTime, accountID: creditAccountID, amount: commissionAmt, transactionType: CREDIT
+					}
+					TransactionDetails.create(tdCommissionCollectedAccount, function (err, data) { });
+				}
+			});
 	}
 
 	var postAuctionInstallmentDetails = function (voucherNo, chitvalue, subscribercount, ledgeraccountsarray,
-		subscribersarray, groupLedgerID, narration, remarks, decodedValues) {
+		subscribersarray, creditAccountID, narration, remarks, decodedValues, transactionDateTime) {
 
 		var auctionInstallment = parseFloat(chitvalue / subscribercount).toFixed(2);
 		var auctionDividendAmount = parseFloat(decodedValues.dividendAmount).toFixed(2);
@@ -1048,42 +1133,44 @@ module.exports = function (app) {
 
 		//Header
 		var thAuctionInstallment = {
-			VoucherType: "Journal", Date: new Date(), Prefix: "", VoucherNo: voucherNo,
-			Suffix: "", RefNo: voucherNo, Amount: chitvalue, UserId: "", NoOfItems: subscribercount + 1
+			Date: transactionDateTime, voucherClass: "Journal", voucherType: "Journal", Prefix: "", VoucherNo: voucherNo,
+			Suffix: "", referenceNo: voucherNo, transactionTotalAmount: chitvalue, userID: "", noOfDetails: subscribercount + 1,
+			narration: narration, remarks: remarks
 		}
-		TransactionHeader.create(thAuctionInstallment, function (err, data) { });
+		TransactionHeader.create(thAuctionInstallment,
+			function (err, data) {
+				if (data != null) {
+					var transactionHeaderID = data._id;
 
-		//Details
-		var list = getLedgerAccountOfSubscribers(ledgeraccountsarray);
-		if (list != null && list.length > 0) {
-			for (var index = 0; index < list.length; index++) {
-				var isCompanyTicket = checkIfSubscriberIsCompanyTicket(subscribersarray, list[index].ReferenceID);
-				var ledgerID = isCompanyTicket ? foremanTktAccountLedger.LedgerID : list[index].LedgerID;
+					//Details
+					var list = getLedgerAccountOfSubscribers(ledgeraccountsarray);
+					if (list != null && list.length > 0) {
+						for (var index = 0; index < list.length; index++) {
+							var isCompanyTicket = checkIfSubscriberIsCompanyTicket(subscribersarray, list[index].ReferenceID);
+							var debitAccountID = isCompanyTicket ? foremanTktAccountLedger.LedgerID : list[index].LedgerID;
 
-				var tdSubscriberInstallment = {
-					VoucherType: "Journal", VoucherDate: new Date(), Prefix: "",
-					VoucherNo: voucherNo, Suffix: "", RefNo: voucherNo, AccountId: ledgerID,
-					Amount: auctionInstallment, Narration: narration, Remarks: remarks, TransType: DEBIT
+							var tdSubscriberInstallment = {
+								transactionHeaderID: transactionHeaderID, date: transactionDateTime, accountID: debitAccountID, amount: auctionInstallment, transactionType: DEBIT
+							}
+							TransactionDetails.create(tdSubscriberInstallment, function (err, data) { });
+
+							if (!isCompanyTicket) {
+								saveSubscriberInstallmentDues(decodedValues.groupID, list[index].ReferenceID,
+									decodedValues.auctionNo, auctionInstallment, auctionDividendAmount, transactionDateTime);
+							}
+						}
+					}
+
+					var tdGroupInstallment = {
+						transactionHeaderID: transactionHeaderID, date: transactionDateTime, accountID: creditAccountID, amount: chitvalue, transactionType: CREDIT
+					}
+					TransactionDetails.create(tdGroupInstallment, function (err, data) { });
 				}
-				TransactionDetails.create(tdSubscriberInstallment, function (err, data) { });
-
-				if (!isCompanyTicket) {
-					saveSubscriberInstallmentDues(decodedValues.groupID, list[index].ReferenceID,
-						decodedValues.auctionNo, auctionInstallment, auctionDividendAmount);
-				}
-			}
-		}
-
-		var tdGroupInstallment = {
-			VoucherType: "Journal", VoucherDate: new Date(), Prefix: "", VoucherNo: voucherNo,
-			Suffix: "", RefNo: voucherNo, AccountId: groupLedgerID, Amount: chitvalue,
-			Narration: narration, Remarks: remarks, TransType: CREDIT
-		}
-		TransactionDetails.create(tdGroupInstallment, function (err, data) { });
+			});
 	}
 
 	var saveSubscriberInstallmentDues = function (groupID, subscriberID, auctionNo,
-		auctionInstallmentAmount, auctionDividendAmount) {
+		auctionInstallmentAmount, auctionDividendAmount, transactionDateTime) {
 
 		SubscriberTicketMapping.findOne({
 			"groupID": ObjectID(groupID),
@@ -1099,131 +1186,137 @@ module.exports = function (app) {
 						auctionInstallmentAmount: auctionInstallmentAmount,
 						auctionDividendAmount: auctionDividendAmount,
 						installmentAmountDue: (auctionInstallmentAmount - auctionDividendAmount),
-						dueDate: new Date()
+						dueDate: transactionDateTime
 					}
 
-					SubscriberInstallmentDetails.create(obj, function (err, data) {
-
-					});
+					SubscriberInstallmentDetails.create(obj, function (err, data) { });
 				}
 			});
 
 	}
 
 	var postDividendDistributionDetails = function (voucherNo, dividendAmt, subscribercount, ledgeraccountsarray,
-		subscribersarray, groupDividendLedgerID, narration, remarks) {
+		subscribersarray, debitAccountID, narration, remarks, transactionDateTime) {
 
 		var dividendDistributionAmount = parseFloat(dividendAmt / subscribercount).toFixed(2);
 		var dividendEarnedLedger = getLedgerAccount(0, null, LEDGER_DIVIDEND_EARNED, ledgeraccountsarray);
 
 		//Header
 		var thDividendDistributionAmt = {
-			VoucherType: "Journal", Date: new Date(), Prefix: "", VoucherNo: voucherNo,
-			Suffix: "", RefNo: voucherNo, Amount: dividendAmt, UserId: "", NoOfItems: subscribercount + 1
+			Date: transactionDateTime, voucherClass: "Journal", voucherType: "Journal", Prefix: "", VoucherNo: voucherNo,
+			Suffix: "", referenceNo: voucherNo, transactionTotalAmount: dividendAmt, userID: "", noOfDetails: subscribercount + 1,
+			narration: narration, remarks: remarks
 		}
-		TransactionHeader.create(thDividendDistributionAmt, function (err, data) { });
+		TransactionHeader.create(thDividendDistributionAmt,
+			function (err, data) {
+				if (data != null) {
+					var transactionHeaderID = data._id;
 
-		//Details
-		var tdDividendAmt = {
-			VoucherType: "Journal", VoucherDate: new Date(), Prefix: "", VoucherNo: voucherNo,
-			Suffix: "", RefNo: voucherNo, AccountId: groupDividendLedgerID, Amount: dividendAmt,
-			Narration: narration, Remarks: remarks, TransType: DEBIT
-		}
-		TransactionDetails.create(tdDividendAmt, function (err, data) { });
+					//Details
+					var tdDividendAmt = {
+						transactionHeaderID: transactionHeaderID, date: transactionDateTime, accountID: debitAccountID, amount: dividendAmt, transactionType: DEBIT
+					}
+					TransactionDetails.create(tdDividendAmt, function (err, data) { });
 
-		var list = getLedgerAccountOfSubscribers(ledgeraccountsarray);
-		if (list != null && list.length > 0) {
-			for (var index = 0; index < list.length; index++) {
-				var ledgerID = checkIfSubscriberIsCompanyTicket(subscribersarray, list[index].ReferenceID) ?
-					dividendEarnedLedger.LedgerID : list[index].LedgerID;
+					var list = getLedgerAccountOfSubscribers(ledgeraccountsarray);
+					if (list != null && list.length > 0) {
+						for (var index = 0; index < list.length; index++) {
+							var creditAccountID = checkIfSubscriberIsCompanyTicket(subscribersarray, list[index].ReferenceID) ?
+								dividendEarnedLedger.LedgerID : list[index].LedgerID;
 
-				var tdSubscriberDividend = {
-					VoucherType: "Journal", VoucherDate: new Date(), Prefix: "",
-					VoucherNo: voucherNo, Suffix: "", RefNo: voucherNo, AccountId: ledgerID,
-					Amount: dividendDistributionAmount, Narration: narration, Remarks: remarks, TransType: CREDIT
+							var tdSubscriberDividend = {
+								transactionHeaderID: transactionHeaderID, date: transactionDateTime, accountID: creditAccountID, amount: dividendDistributionAmount, transactionType: CREDIT
+							}
+							TransactionDetails.create(tdSubscriberDividend, function (err, data) { });
+						}
+					}
 				}
-				TransactionDetails.create(tdSubscriberDividend, function (err, data) { });
-			}
-		}
+			});
 	}
 
 	var postAuctionInstallmentReinvestedDetails = function (voucherNo, chitvalue, subscribercount,
-		foremanInvestmentAccountLedgerID, foremanTktAccountLedgerID, narration, remarks) {
+		debitAccountID, creditAccountID, narration, remarks, transactionDateTime) {
 		var auctionInstallment = parseFloat(chitvalue / subscribercount).toFixed(2);
 
 		//Header
 		var thAuctionInstallmentRevestment = {
-			VoucherType: "Journal", Date: new Date(), Prefix: "", VoucherNo: voucherNo,
-			Suffix: "", RefNo: voucherNo, Amount: auctionInstallment, UserId: "", NoOfItems: 2
+			Date: transactionDateTime, voucherClass: "Journal", voucherType: "Journal", Prefix: "", VoucherNo: voucherNo,
+			Suffix: "", referenceNo: voucherNo, transactionTotalAmount: auctionInstallment, userID: "", noOfDetails: 2,
+			narration: narration, remarks: remarks
 		}
-		TransactionHeader.create(thAuctionInstallmentRevestment, function (err, data) { });
+		TransactionHeader.create(thAuctionInstallmentRevestment,
+			function (err, data) {
+				if (data != null) {
+					var transactionHeaderID = data._id;
 
-		//Details
-		var tdForemanInvestmentAcc = {
-			VoucherType: "Journal", VoucherDate: new Date(), Prefix: "",
-			VoucherNo: voucherNo, Suffix: "", RefNo: voucherNo, AccountId: foremanInvestmentAccountLedgerID,
-			Amount: auctionInstallment, Narration: narration, Remarks: remarks, TransType: DEBIT
-		}
-		TransactionDetails.create(tdForemanInvestmentAcc, function (err, data) { });
+					//Details
+					var tdForemanInvestmentAcc = {
+						transactionHeaderID: transactionHeaderID, date: transactionDateTime, accountID: debitAccountID, amount: auctionInstallment, transactionType: DEBIT
+					}
+					TransactionDetails.create(tdForemanInvestmentAcc, function (err, data) { });
 
-		var tdForemanTktAcc = {
-			VoucherType: "Journal", VoucherDate: new Date(), Prefix: "", VoucherNo: voucherNo,
-			Suffix: "", RefNo: voucherNo, AccountId: foremanTktAccountLedgerID, Amount: auctionInstallment,
-			Narration: narration, Remarks: remarks, TransType: CREDIT
-		}
-		TransactionDetails.create(tdForemanTktAcc, function (err, data) { });
+					var tdForemanTktAcc = {
+						transactionHeaderID: transactionHeaderID, date: transactionDateTime, accountID: debitAccountID, amount: auctionInstallment, transactionType: CREDIT
+					}
+					TransactionDetails.create(tdForemanTktAcc, function (err, data) { });
+				}
+			});
 	}
 
-	var postLossOfDiscountDetails = function (voucherNo, discount, groupLedgerID,
-		lossOfDiscountLedgerID, narration, remarks) {
+	var postLossOfDiscountDetails = function (voucherNo, discount, debitAccountID,
+		creditAccountID, narration, remarks, transactionDateTime) {
 		//Header
 		var thLossOfDiscount = {
-			VoucherType: "Journal", Date: new Date(), Prefix: "", VoucherNo: voucherNo,
-			Suffix: "", RefNo: voucherNo, Amount: discount, UserId: "", NoOfItems: 2
+			Date: transactionDateTime, voucherClass: "Journal", voucherType: "Journal", Prefix: "", VoucherNo: voucherNo,
+			Suffix: "", referenceNo: voucherNo, transactionTotalAmount: discount, userID: "", noOfDetails: 2,
+			narration: narration, remarks: remarks
 		}
-		TransactionHeader.create(thLossOfDiscount, function (err, data) { });
+		TransactionHeader.create(thLossOfDiscount,
+			function (err, data) {
+				if (data != null) {
+					var transactionHeaderID = data._id;
 
-		//Details
-		var tdLossOfDiscountGroup = {
-			VoucherType: "Journal", VoucherDate: new Date(), Prefix: "", VoucherNo: voucherNo,
-			Suffix: "", RefNo: voucherNo, AccountId: groupLedgerID, Amount: discount,
-			Narration: narration, Remarks: remarks, TransType: DEBIT
-		}
-		TransactionDetails.create(tdLossOfDiscountGroup, function (err, data) { });
+					//Details
+					var tdLossOfDiscountGroup = {
+						transactionHeaderID: transactionHeaderID, date: transactionDateTime, accountID: debitAccountID, amount: discount, transactionType: DEBIT
+					}
+					TransactionDetails.create(tdLossOfDiscountGroup, function (err, data) { });
 
-		var tdLossOfDiscount = {
-			VoucherType: "Journal", VoucherDate: new Date(), Prefix: "", VoucherNo: voucherNo,
-			Suffix: "", RefNo: voucherNo, AccountId: lossOfDiscountLedgerID, Amount: discount,
-			Narration: narration, Remarks: remarks, TransType: CREDIT
-		}
-		TransactionDetails.create(tdLossOfDiscount, function (err, data) { });
+					var tdLossOfDiscount = {
+						transactionHeaderID: transactionHeaderID, date: transactionDateTime, accountID: debitAccountID, amount: discount, transactionType: CREDIT
+					}
+					TransactionDetails.create(tdLossOfDiscount, function (err, data) { });
+				}
+			});
 	}
 
 	var postDividendReinvestmentDetails = function (voucherNo, dividendAmt, subscribercount,
-		foremanDividendReinvestedLedgerID, dividendEarnedLedgerID, narration, remarks) {
+		creditAccountID, debitAccountID, narration, remarks, transactionDateTime) {
 		var dividend = parseFloat(dividendAmt / subscribercount).toFixed(2);
 
 		//Header
 		var thDividendReinvestment = {
-			VoucherType: "Journal", Date: new Date(), Prefix: "", VoucherNo: voucherNo,
-			Suffix: "", RefNo: voucherNo, Amount: dividend, UserId: "", NoOfItems: 2
+			Date: transactionDateTime, voucherClass: "Journal", voucherType: "Journal", Prefix: "", VoucherNo: voucherNo,
+			Suffix: "", referenceNo: voucherNo, transactionTotalAmount: dividend, userID: "", noOfDetails: 2,
+			narration: narration, remarks: remarks
 		}
-		TransactionHeader.create(thDividendReinvestment, function (err, data) { });
+		TransactionHeader.create(thDividendReinvestment,
+			function (err, data) {
+				if (data != null) {
+					var transactionHeaderID = data._id;
 
-		//Details
-		var tdDividendEarned = {
-			VoucherType: "Journal", VoucherDate: new Date(), Prefix: "",
-			VoucherNo: voucherNo, Suffix: "", RefNo: voucherNo, AccountId: dividendEarnedLedgerID,
-			Amount: dividend, Narration: narration, Remarks: remarks, TransType: DEBIT
-		}
-		TransactionDetails.create(tdDividendEarned, function (err, data) { });
+					//Details
+					var tdDividendEarned = {
+						transactionHeaderID: transactionHeaderID, date: transactionDateTime, accountID: debitAccountID, amount: dividend, transactionType: DEBIT
+					}
+					TransactionDetails.create(tdDividendEarned, function (err, data) { });
 
-		var tdForemanDividendReinvested = {
-			VoucherType: "Journal", VoucherDate: new Date(), Prefix: "", VoucherNo: voucherNo,
-			Suffix: "", RefNo: voucherNo, AccountId: foremanDividendReinvestedLedgerID, Amount: dividend,
-			Narration: narration, Remarks: remarks, TransType: CREDIT
-		}
-		TransactionDetails.create(tdForemanDividendReinvested, function (err, data) { });
+					var tdForemanDividendReinvested = {
+						transactionHeaderID: transactionHeaderID, date: transactionDateTime, accountID: creditAccountID, amount: dividend, transactionType: CREDIT
+					}
+					TransactionDetails.create(tdForemanDividendReinvested, function (err, data) { });
+				}
+			});
 	}
 
 	var getLedgerAccount = function (refType, refID, accName, list) {
@@ -1287,8 +1380,24 @@ module.exports = function (app) {
 	   ------------------------------------------------------------------------- */
 	app.get('/api/transactions', function (req, res) {
 		TransactionDetails.aggregate([
-			{ $sort: { "VoucherNo": 1, "TransType": 1 } },
-			{ $lookup: { from: "ledgeraccounts", localField: "AccountId", foreignField: "_id", as: "ledger" } }
+			{ $lookup: { from: "ledgeraccounts", localField: "accountID", foreignField: "_id", as: "ledger" } },
+			{ $unwind: { path: '$ledger' } },
+			{ $lookup: { from: "transactionheaders", localField: "transactionHeaderID", foreignField: "_id", as: "transactions" } },
+			{ $unwind: { path: '$transactions' } },
+			{
+				$project: {
+					TransactionID: "$_id",
+					VoucherNo: "$transactions.referenceNo",
+					VoucherType: "$transactions.voucherType",
+					VoucherDate: "$date",
+					accountName: "$ledger.accountName",
+					TransType: "$transactionType",
+					Amount: "$amount",
+					Narration: "$transactions.narration",
+					Remarks: "$transactions.remarks"
+				}
+			},
+			{ $sort: { "VoucherDate": 1, "VoucherNo": 1 } }
 		]).exec(function (err, data) {
 			if (err) { res.send(err); }
 			res.json(data);
@@ -1412,6 +1521,9 @@ module.exports = function (app) {
 	});
 
 	var postReceiptPygmyControlDetails = function (amount, narration, remarks) {
+		var RECEIPT_CLASS = "Receipt";
+		var RECEIPT_TYPE = "Receipt";
+		var transactionDateTime = new Date();
 
 		LedgerAccount.find({
 			"accountName": {
@@ -1433,34 +1545,46 @@ module.exports = function (app) {
 						}
 					}
 
-					TransactionHeader.findOne({}, { VoucherNo: 1, _id: 0 })
-						.sort({ "VoucherNo": -1 }).limit(1).lean().exec(function (err, dataVoucherNo) {
-							if (dataVoucherNo != null) {
-								maxVoucherNo = dataVoucherNo.VoucherNo + 1;
+					VoucherSeriesDetails.findOne({ "voucherClass": RECEIPT_CLASS, "voucherType": RECEIPT_TYPE },
+						function (err, data) {
+							var maxVoucherNo = 0;
+							if (data == null) {
+								maxVoucherNo = 0;
+							} else {
+								/**
+								 * if the lastNo is 0 then use the (startingVoucherTypeNo - 1) as the voucher number 
+								 * will be incremented furthur on in the process, other wise use the lastNo field itself
+								 */
+								maxVoucherNo = data.lastNo == 0 ? data.startingVoucherTypeNo - 1 : data.lastNo;
 							}
+							maxVoucherNo = maxVoucherNo + 1;
 
-							//Header
 							var thPygmyControl = {
-								VoucherType: "Receipt", Date: new Date(), Prefix: "", VoucherNo: maxVoucherNo,
-								Suffix: "", RefNo: maxVoucherNo, Amount: amount, UserId: "", NoOfItems: 2
+								Date: transactionDateTime, voucherClass: RECEIPT_CLASS, voucherType: RECEIPT_TYPE, Prefix: "", VoucherNo: maxVoucherNo,
+								Suffix: "", referenceNo: maxVoucherNo, transactionTotalAmount: amount, userID: "", noOfDetails: 2,
+								narration: narration, remarks: remarks
 							}
-							TransactionHeader.create(thPygmyControl, function (err, data) { });
+							TransactionHeader.create(thPygmyControl, function (err, data) {
+								if (data != null) {
+									var transactionHeaderID = data._id;
 
-							//Details
-							var tdCash = {
-								VoucherType: "Receipt", VoucherDate: new Date(), Prefix: "",
-								VoucherNo: maxVoucherNo, Suffix: "", RefNo: maxVoucherNo, AccountId: cashLedgerID,
-								Amount: amount, Narration: narration, Remarks: remarks, TransType: DEBIT
-							}
-							TransactionDetails.create(tdCash, function (err, data) { });
+									//Details
+									var tdCash = {
+										transactionHeaderID: transactionHeaderID, date: transactionDateTime, accountID: cashLedgerID, amount: amount, transactionType: DEBIT
+									}
+									TransactionDetails.create(tdCash, function (err, data) { });
 
-							var tdPygmyControl = {
-								VoucherType: "Receipt", VoucherDate: new Date(), Prefix: "",
-								VoucherNo: maxVoucherNo, Suffix: "", RefNo: maxVoucherNo, AccountId: pygmyControlLedgerID,
-								Amount: amount, Narration: narration, Remarks: remarks, TransType: CREDIT
-							}
-							TransactionDetails.create(tdPygmyControl, function (err, data) { });
+									var tdPygmyControl = {
+										transactionHeaderID: transactionHeaderID, date: transactionDateTime, accountID: pygmyControlLedgerID, amount: amount, transactionType: CREDIT
+									}
+									TransactionDetails.create(tdPygmyControl, function (err, data) { });
+								}
+							});
 
+							/**
+							 * update the last used Voucher number in the voucher series collection
+							 */
+							updateLatestVoucherNumber(RECEIPT_CLASS, RECEIPT_TYPE, maxVoucherNo);
 						});
 				}
 			});
