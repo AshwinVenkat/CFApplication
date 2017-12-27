@@ -767,7 +767,7 @@ module.exports = function (app) {
 					maxVoucherNo = data.lastNo == 0 ? data.startingVoucherTypeNo - 1 : data.lastNo;
 				}
 				decodedValues.maxVoucherNo = maxVoucherNo;
-
+				
 				/**
 				 * 1 - CAOA: Current Auction On Auction, 	2 - CAOR: Current Auction On Receipt
 				 * 3 - NAOA: Next Auction On Auction, 		4 - NAOR: Next Auction On Receipt
@@ -820,16 +820,19 @@ module.exports = function (app) {
 		var dividendEarnedLedger = getLedgerAccount(0, null, LEDGER_DIVIDEND_EARNED, ledgeraccountsarray);
 
 		var isCompanyTicketPreset = checkCompanyTicket(subscribersarray);
+		var countCompanyTickets = getCompanyTicketsCount(subscribersarray);
 		var isPrizeWinnerCompanyTicket = checkIfSubscriberIsCompanyTicket(subscribersarray, decodedValues.prizedSubscriberID);
 
 		var transactionDateTime = new Date();
 
 		//Auction installment reinvested
 		if (isCompanyTicketPreset) {
-			maxVoucherNo += 1;
-			postAuctionInstallmentReinvestedDetails(maxVoucherNo, decodedValues.chitValue, decodedValues.subscribercount,
-				foremanInvestmentAccountLedger.LedgerID, foremanTktAccountLedger.LedgerID, "Auction installment reinvested",
-				remarks, transactionDateTime);
+			for (var index = 0; index < countCompanyTickets; index++) {
+				maxVoucherNo += 1;
+				postAuctionInstallmentReinvestedDetails(maxVoucherNo, decodedValues.chitValue, decodedValues.subscribercount,
+					foremanInvestmentAccountLedger.LedgerID, foremanTktAccountLedger.LedgerID, "Auction installment reinvested",
+					remarks, transactionDateTime);
+			}
 		}
 
 		//Auction prize amount credit
@@ -888,10 +891,12 @@ module.exports = function (app) {
 
 		//Auction dividend reinvested
 		if (isCompanyTicketPreset && !isPrizeWinnerCompanyTicket) {
-			maxVoucherNo += 1;
-			postDividendReinvestmentDetails(maxVoucherNo, decodedValues.dividendAmount, decodedValues.subscribercount,
-				foremanDividendReinvestedLedger.LedgerID, dividendEarnedLedger.LedgerID, "Auction dividend reinvested",
-				remarks, transactionDateTime);
+			for (var index = 0; index < countCompanyTickets; index++) {
+				maxVoucherNo += 1;
+				postDividendReinvestmentDetails(maxVoucherNo, decodedValues.dividendAmount, decodedValues.subscribercount,
+					foremanDividendReinvestedLedger.LedgerID, dividendEarnedLedger.LedgerID, "Auction dividend reinvested",
+					remarks, transactionDateTime);
+			}
 		}
 
 		/**
@@ -928,6 +933,7 @@ module.exports = function (app) {
 		var dividendEarnedLedger = getLedgerAccount(0, null, LEDGER_DIVIDEND_EARNED, ledgeraccountsarray);
 
 		var isCompanyTicketPreset = checkCompanyTicket(subscribersarray);
+		var countCompanyTickets = getCompanyTicketsCount(subscribersarray);
 		var isPrizeWinnerCompanyTicket = checkIfSubscriberIsCompanyTicket(subscribersarray, decodedValues.prizedSubscriberID);
 
 		var isFirstAuctionInGroup = (decodedValues.auctionNo == 1) ? true : false;
@@ -937,10 +943,12 @@ module.exports = function (app) {
 
 		//Auction installment reinvested
 		if (isCompanyTicketPreset) {
-			maxVoucherNo += 1;
-			postAuctionInstallmentReinvestedDetails(maxVoucherNo, decodedValues.chitValue, decodedValues.subscribercount,
-				foremanInvestmentAccountLedger.LedgerID, foremanTktAccountLedger.LedgerID, "Auction installment reinvested",
-				remarks, transactionDateTime);
+			for (var index = 0; index < countCompanyTickets; index++) {
+				maxVoucherNo += 1;
+				postAuctionInstallmentReinvestedDetails(maxVoucherNo, decodedValues.chitValue, decodedValues.subscribercount,
+					foremanInvestmentAccountLedger.LedgerID, foremanTktAccountLedger.LedgerID, "Auction installment reinvested",
+					remarks, transactionDateTime);
+			}
 		}
 
 		//Auction prize amount credit
@@ -981,30 +989,6 @@ module.exports = function (app) {
 				remarks, decodedValues, transactionDateTime);
 		}
 
-		//Dividend distributed - previous auction
-		GroupAuction.findOne({ "groupID": ObjectID(decodedValues.groupID), "auctionNo": decodedValues.auctionNo - 1 },
-			function (err, data) {
-				if (data != null) {
-					var dividendAmt = (data.data["dividend_amount"] != null && data.data["dividend_amount"] != ""
-						&& typeof (data.data["dividend_amount"]) != "undefined") ? data.data["dividend_amount"] : 0;
-					if (groupDividendLedger != null && dividendAmt > 0) {
-						maxVoucherNo += 1;
-						//asdf
-						postDividendDistributionDetails(maxVoucherNo, dividendAmt, decodedValues.subscribercount,
-							ledgeraccountsarray, subscribersarray, groupDividendLedger.LedgerID, "Dividend distributed",
-							remarks, transactionDateTime);
-
-						//Auction dividend reinvested
-						if (isCompanyTicketPreset) {
-							maxVoucherNo += 1;
-							postDividendReinvestmentDetails(maxVoucherNo, dividendAmt, decodedValues.subscribercount,
-								foremanDividendReinvestedLedger.LedgerID, dividendEarnedLedger.LedgerID, "Auction dividend reinvested",
-								remarks, transactionDateTime);
-						}
-					}
-				}
-			});
-
 		if (groupDividendLedger != null) {
 			// if(!isCompanyTicketPreset){
 			maxVoucherNo += 1;
@@ -1024,19 +1008,45 @@ module.exports = function (app) {
 
 					//Auction dividend reinvested
 					if (isCompanyTicketPreset) {
-						maxVoucherNo += 1;
-						postDividendReinvestmentDetails(maxVoucherNo, decodedValues.dividendAmount, decodedValues.subscribercount,
-							foremanDividendReinvestedLedger.LedgerID, dividendEarnedLedger.LedgerID, "Auction dividend reinvested",
-							remarks, transactionDateTime);
+						for (var index = 0; index < countCompanyTickets; index++) {
+							maxVoucherNo += 1;
+							postDividendReinvestmentDetails(maxVoucherNo, decodedValues.dividendAmount, decodedValues.subscribercount,
+								foremanDividendReinvestedLedger.LedgerID, dividendEarnedLedger.LedgerID, "Auction dividend reinvested",
+								remarks, transactionDateTime);
+						}
 					}
 				}
 			}
 		}
 
-		/**
-		 * update the last used Voucher number in the voucher series collection
-		 */
-		updateLatestVoucherNumber("Journal", "Journal", maxVoucherNo);
+		//Dividend distributed - previous auction
+		GroupAuction.findOne({ "groupID": ObjectID(decodedValues.groupID), "auctionNo": decodedValues.auctionNo - 1 },
+			function (err, data) {
+				if (data != null) {
+					var dividendAmt = (data.data["dividend_amount"] != null && data.data["dividend_amount"] != ""
+						&& typeof (data.data["dividend_amount"]) != "undefined") ? data.data["dividend_amount"] : 0;
+					if (groupDividendLedger != null && dividendAmt > 0) {
+						maxVoucherNo += 1;
+						postDividendDistributionDetails(maxVoucherNo, dividendAmt, decodedValues.subscribercount,
+							ledgeraccountsarray, subscribersarray, groupDividendLedger.LedgerID, "Dividend distributed",
+							remarks, transactionDateTime);
+
+						//Auction dividend reinvested
+						if (isCompanyTicketPreset) {
+							for (var index = 0; index < countCompanyTickets; index++) {
+								maxVoucherNo += 1;
+								postDividendReinvestmentDetails(maxVoucherNo, dividendAmt, decodedValues.subscribercount,
+									foremanDividendReinvestedLedger.LedgerID, dividendEarnedLedger.LedgerID, "Auction dividend reinvested",
+									remarks, transactionDateTime);
+							}
+						}
+					}
+				}
+				/**
+				 * update the last used Voucher number in the voucher series collection
+				 */
+				updateLatestVoucherNumber("Journal", "Journal", maxVoucherNo);
+			});
 	}
 
 	var postJournalEntriesForNAOR = function (auctiondata, groupdata, subscribersarray,
@@ -1072,6 +1082,7 @@ module.exports = function (app) {
 
 	var postAuctionDividendAmountDetails = function (voucherNo, dividendAmt, debitAccountID,
 		creditAccountID, narration, remarks, transactionDateTime) {
+		
 		//Header
 		var thAuctionDividend = {
 			Date: transactionDateTime, voucherClass: "Journal", voucherType: "Journal", Prefix: "", VoucherNo: voucherNo,
@@ -1099,6 +1110,7 @@ module.exports = function (app) {
 
 	var postCompanyCommissionDetails = function (voucherNo, commissionAmt, debitAccountID,
 		creditAccountID, narration, remarks, transactionDateTime) {
+		
 		//Header
 		var thCompanyCommission = {
 			Date: transactionDateTime, voucherClass: "Journal", voucherType: "Journal", Prefix: "", VoucherNo: voucherNo,
@@ -1126,7 +1138,7 @@ module.exports = function (app) {
 
 	var postAuctionInstallmentDetails = function (voucherNo, chitvalue, subscribercount, ledgeraccountsarray,
 		subscribersarray, creditAccountID, narration, remarks, decodedValues, transactionDateTime) {
-
+		
 		var auctionInstallment = parseFloat(chitvalue / subscribercount).toFixed(2);
 		var auctionDividendAmount = parseFloat(decodedValues.dividendAmount).toFixed(2);
 		var foremanTktAccountLedger = getLedgerAccount(0, null, LEDGER_FOREMAN_TICKET_ACCOUNT, ledgeraccountsarray);
@@ -1197,7 +1209,7 @@ module.exports = function (app) {
 
 	var postDividendDistributionDetails = function (voucherNo, dividendAmt, subscribercount, ledgeraccountsarray,
 		subscribersarray, debitAccountID, narration, remarks, transactionDateTime) {
-
+		
 		var dividendDistributionAmount = parseFloat(dividendAmt / subscribercount).toFixed(2);
 		var dividendEarnedLedger = getLedgerAccount(0, null, LEDGER_DIVIDEND_EARNED, ledgeraccountsarray);
 
@@ -1236,6 +1248,7 @@ module.exports = function (app) {
 
 	var postAuctionInstallmentReinvestedDetails = function (voucherNo, chitvalue, subscribercount,
 		debitAccountID, creditAccountID, narration, remarks, transactionDateTime) {
+		
 		var auctionInstallment = parseFloat(chitvalue / subscribercount).toFixed(2);
 
 		//Header
@@ -1265,6 +1278,7 @@ module.exports = function (app) {
 
 	var postLossOfDiscountDetails = function (voucherNo, discount, debitAccountID,
 		creditAccountID, narration, remarks, transactionDateTime) {
+		
 		//Header
 		var thLossOfDiscount = {
 			Date: transactionDateTime, voucherClass: "Journal", voucherType: "Journal", Prefix: "", VoucherNo: voucherNo,
@@ -1292,6 +1306,7 @@ module.exports = function (app) {
 
 	var postDividendReinvestmentDetails = function (voucherNo, dividendAmt, subscribercount,
 		creditAccountID, debitAccountID, narration, remarks, transactionDateTime) {
+		
 		var dividend = parseFloat(dividendAmt / subscribercount).toFixed(2);
 
 		//Header
@@ -1362,6 +1377,16 @@ module.exports = function (app) {
 			}
 		}
 		return flag;
+	}
+
+	var getCompanyTicketsCount = function (list) {
+		var count = 0;
+		for (var index = 0; index < list.length; index++) {
+			if (list[index].IsCompanyTicket == "1") {
+				count += 1;
+			}
+		}
+		return count;
 	}
 
 	var checkIfSubscriberIsCompanyTicket = function (list, subscriberid) {
