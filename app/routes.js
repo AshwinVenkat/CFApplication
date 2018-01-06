@@ -767,7 +767,7 @@ module.exports = function (app) {
 					maxVoucherNo = data.lastNo == 0 ? data.startingVoucherTypeNo - 1 : data.lastNo;
 				}
 				decodedValues.maxVoucherNo = maxVoucherNo;
-				
+
 				/**
 				 * 1 - CAOA: Current Auction On Auction, 	2 - CAOR: Current Auction On Receipt
 				 * 3 - NAOA: Next Auction On Auction, 		4 - NAOR: Next Auction On Receipt
@@ -1082,7 +1082,7 @@ module.exports = function (app) {
 
 	var postAuctionDividendAmountDetails = function (voucherNo, dividendAmt, debitAccountID,
 		creditAccountID, narration, remarks, transactionDateTime) {
-		
+
 		//Header
 		var thAuctionDividend = {
 			Date: transactionDateTime, voucherClass: "Journal", voucherType: "Journal", Prefix: "", VoucherNo: voucherNo,
@@ -1110,7 +1110,7 @@ module.exports = function (app) {
 
 	var postCompanyCommissionDetails = function (voucherNo, commissionAmt, debitAccountID,
 		creditAccountID, narration, remarks, transactionDateTime) {
-		
+
 		//Header
 		var thCompanyCommission = {
 			Date: transactionDateTime, voucherClass: "Journal", voucherType: "Journal", Prefix: "", VoucherNo: voucherNo,
@@ -1138,9 +1138,9 @@ module.exports = function (app) {
 
 	var postAuctionInstallmentDetails = function (voucherNo, chitvalue, subscribercount, ledgeraccountsarray,
 		subscribersarray, creditAccountID, narration, remarks, decodedValues, transactionDateTime) {
-		
+
 		var auctionInstallment = parseFloat(chitvalue / subscribercount).toFixed(2);
-		var auctionDividendAmount = parseFloat(decodedValues.dividendAmount).toFixed(2);
+		var auctionDividendAmountPerSubscriber = parseFloat(decodedValues.dividendAmount / subscribercount).toFixed(2);
 		var foremanTktAccountLedger = getLedgerAccount(0, null, LEDGER_FOREMAN_TICKET_ACCOUNT, ledgeraccountsarray);
 
 		//Header
@@ -1167,8 +1167,8 @@ module.exports = function (app) {
 							TransactionDetails.create(tdSubscriberInstallment, function (err, data) { });
 
 							if (!isCompanyTicket) {
-								saveSubscriberInstallmentDues(decodedValues.groupID, list[index].ReferenceID,
-									decodedValues.auctionNo, auctionInstallment, auctionDividendAmount, transactionDateTime);
+								saveSubscriberInstallmentDues(decodedValues.groupID, list[index].ReferenceID, list[index].TicketNo,
+									decodedValues.auctionNo, auctionInstallment, auctionDividendAmountPerSubscriber, transactionDateTime);
 							}
 						}
 					}
@@ -1181,12 +1181,13 @@ module.exports = function (app) {
 			});
 	}
 
-	var saveSubscriberInstallmentDues = function (groupID, subscriberID, auctionNo,
+	var saveSubscriberInstallmentDues = function (groupID, subscriberID, ticketNo, auctionNo,
 		auctionInstallmentAmount, auctionDividendAmount, transactionDateTime) {
 
 		SubscriberTicketMapping.findOne({
 			"groupID": ObjectID(groupID),
-			"subscriberID": ObjectID(subscriberID)
+			"subscriberID": ObjectID(subscriberID),
+			"ticketNo": ticketNo 
 		},
 			function (err, stmData) {
 				if (stmData != null) {
@@ -1196,8 +1197,9 @@ module.exports = function (app) {
 						ticketNo: stmData["ticketNo"],
 						auctionNo: auctionNo,
 						auctionInstallmentAmount: auctionInstallmentAmount,
-						auctionDividendAmount: auctionDividendAmount,
-						installmentAmountDue: (auctionInstallmentAmount - auctionDividendAmount),
+						auctionDividendAmount: (auctionDividendAmount <= 0) ? 0 : auctionDividendAmount,
+						installmentAmountDue: (auctionDividendAmount <= 0) ?
+							auctionInstallmentAmount : (auctionInstallmentAmount - auctionDividendAmount),
 						dueDate: transactionDateTime
 					}
 
@@ -1209,7 +1211,7 @@ module.exports = function (app) {
 
 	var postDividendDistributionDetails = function (voucherNo, dividendAmt, subscribercount, ledgeraccountsarray,
 		subscribersarray, debitAccountID, narration, remarks, transactionDateTime) {
-		
+
 		var dividendDistributionAmount = parseFloat(dividendAmt / subscribercount).toFixed(2);
 		var dividendEarnedLedger = getLedgerAccount(0, null, LEDGER_DIVIDEND_EARNED, ledgeraccountsarray);
 
@@ -1248,7 +1250,7 @@ module.exports = function (app) {
 
 	var postAuctionInstallmentReinvestedDetails = function (voucherNo, chitvalue, subscribercount,
 		debitAccountID, creditAccountID, narration, remarks, transactionDateTime) {
-		
+
 		var auctionInstallment = parseFloat(chitvalue / subscribercount).toFixed(2);
 
 		//Header
@@ -1278,7 +1280,7 @@ module.exports = function (app) {
 
 	var postLossOfDiscountDetails = function (voucherNo, discount, debitAccountID,
 		creditAccountID, narration, remarks, transactionDateTime) {
-		
+
 		//Header
 		var thLossOfDiscount = {
 			Date: transactionDateTime, voucherClass: "Journal", voucherType: "Journal", Prefix: "", VoucherNo: voucherNo,
@@ -1306,7 +1308,7 @@ module.exports = function (app) {
 
 	var postDividendReinvestmentDetails = function (voucherNo, dividendAmt, subscribercount,
 		creditAccountID, debitAccountID, narration, remarks, transactionDateTime) {
-		
+
 		var dividend = parseFloat(dividendAmt / subscribercount).toFixed(2);
 
 		//Header
@@ -1503,7 +1505,8 @@ module.exports = function (app) {
 	app.post('/api/receipt', function (req, res) {
 		SubscriberTicketMapping.findOne({
 			"groupID": ObjectID(req.body["groupID"]),
-			"subscriberID": ObjectID(req.body["subscriberID"])
+			"subscriberID": ObjectID(req.body["subscriberID"]),
+			"ticketNo": req.body["ticketNo"]
 		},
 			function (err, stmData) {
 				if (stmData != null) {
@@ -1620,14 +1623,15 @@ module.exports = function (app) {
 	app.put('/api/receipt/:id', function (req, res) {
 		SubscriberTicketMapping.findOne({
 			"groupID": ObjectID(req.body["groupID"]),
-			"subscriberID": ObjectID(req.body["subscriberID"])
+			"subscriberID": ObjectID(req.body["subscriberID"]),
+			"ticketNo": req.body["ticketNo"]
 		},
 			function (err, stmData) {
 				if (stmData != null) {
 					var obj = {
 						groupID: ObjectID(req.body["groupID"]),
 						subscriberID: ObjectID(req.body["subscriberID"]),
-						ticketNo: stmData["ticketNo"],
+						ticketNo: req.body["ticketNo"],
 						amount: req.body["amount"],
 						date: new Date()
 					}

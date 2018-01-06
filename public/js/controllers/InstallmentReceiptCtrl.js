@@ -148,43 +148,48 @@
         }
 
         var onSaveClicked = function () {
-            var obj = {
-                amount: (ctrl.dynamicModelValues.formParams.receipt["amount"] != null ||
-                    typeof (ctrl.dynamicModelValues.formParams.receipt["amount"]) != "undefined") ?
-                    parseFloat(ctrl.dynamicModelValues.formParams.receipt["amount"]).toFixed(2) : 0,
-                groupID: ctrl.dynamicModelValues.formParams.receipt["group_name"].id,
-                subscriberID: ctrl.dynamicModelValues.formParams.receipt["subscriber"].id
-            }
+            var subscriberTicketID = ctrl.dynamicModelValues.formParams.receipt["subscriber"].id
+            var splitArray = subscriberTicketID.split("-");
+            if (splitArray != null && splitArray.length >= 2) {
+                var obj = {
+                    amount: (ctrl.dynamicModelValues.formParams.receipt["amount"] != null ||
+                        typeof (ctrl.dynamicModelValues.formParams.receipt["amount"]) != "undefined") ?
+                        parseFloat(ctrl.dynamicModelValues.formParams.receipt["amount"]).toFixed(2) : 0,
+                    groupID: ctrl.dynamicModelValues.formParams.receipt["group_name"].id,
+                    subscriberID: splitArray[0],
+                    ticketNo: parseInt(splitArray[1])
+                }
 
-            var selectedRows = ctrl.gridOptions.api.getSelectedRows();
-            if (ctrl.isEditClicked && selectedRows != null && selectedRows.length > 0) {
-                var selectedRowID = selectedRows[selectedRows.length - 1]["_id"];
-                InstallmentReceiptService.updateReceiptDetail(selectedRowID, obj).then(
-                    function (response) {
-                        if (response != null && response.data != null && response.data.length > 0) {
-                            receiptData = getRowDataFromArray(response);
-                            ctrl.gridOptions.api.setRowData(receiptData);
+                var selectedRows = ctrl.gridOptions.api.getSelectedRows();
+                if (ctrl.isEditClicked && selectedRows != null && selectedRows.length > 0) {
+                    var selectedRowID = selectedRows[selectedRows.length - 1]["_id"];
+                    InstallmentReceiptService.updateReceiptDetail(selectedRowID, obj).then(
+                        function (response) {
+                            if (response != null && response.data != null && response.data.length > 0) {
+                                receiptData = getRowDataFromArray(response);
+                                ctrl.gridOptions.api.setRowData(receiptData);
+                            }
+                        },
+                        function (response) {
+
                         }
-                    },
-                    function (response) {
+                    )
+                } else {
+                    InstallmentReceiptService.addReceiptDetails(obj).then(
+                        function (response) {
+                            if (response != null && response.data != null && response.data.length > 0) {
+                                receiptData = getRowDataFromArray(response);
+                                ctrl.gridOptions.api.setRowData(receiptData);
+                            }
+                        },
+                        function (response) {
 
-                    }
-                )
-            } else {
-                InstallmentReceiptService.addReceiptDetails(obj).then(
-                    function (response) {
-                        if (response != null && response.data != null && response.data.length > 0) {
-                            receiptData = getRowDataFromArray(response);
-                            ctrl.gridOptions.api.setRowData(receiptData);
                         }
-                    },
-                    function (response) {
+                    )
+                }
 
-                    }
-                )
+                onCloseClicked();
             }
-
-            onCloseClicked();
         }
 
         var onCancelClicked = function () {
@@ -227,9 +232,9 @@
                                 var array = new Array();
                                 for (var index = 0; index < result.length; index++) {
                                     var obj = {
-                                        "_id": result[index].subscriberID,
+                                        "_id": result[index].subscriberID + "-" + result[index].ticketNo,
                                         "subscriber": "Ticket " + result[index].ticketNo +
-                                        " - " + result[index].subscriber
+                                            " - " + result[index].subscriber
                                     }
                                     array.push(obj);
                                 }
